@@ -1,0 +1,94 @@
+<app-navbar></app-navbar>
+
+<div class="container">
+  <div class="dashboard-header">
+    <h1>Dashboard</h1>
+    <a routerLink="/endpoints/new" class="btn btn-primary">+ Add Endpoint</a>
+  </div>
+
+  @if (loading) {
+    <div class="loading">Loading...</div>
+  }
+
+  @if (error) {
+    <div class="error-message">{{ error }}</div>
+  }
+
+  @if (!loading && !error) {
+    <div class="stats-grid">
+    <div class="stat-card">
+    <div class="stat-icon">📊</div>
+    <div class="stat-value">{{ endpoints.length }}</div>
+      <div class="stat-label">Total Endpoints</div>
+    </div>
+
+    <div class="stat-card success">
+    <div class="stat-icon">✅</div>
+      <div class="stat-value">{{ activeEndpoints }}</div>
+      <div class="stat-label">Active</div>
+    </div>
+
+    <div class="stat-card warning">
+      <div class="stat-icon">⏸️</div>
+        <div class="stat-value">{{ inactiveEndpoints }}</div>
+        <div class="stat-label">Inactive</div>
+      </div>
+
+      <div class="stat-card info">
+        <div class="stat-icon">⚡</div>
+        <div class="stat-value">{{ averageResponseTime }}ms</div>
+        <div class="stat-label">Avg Response</div>
+      </div>
+
+      <div class="stat-card primary">
+        <div class="stat-icon">📈</div>
+        <div class="stat-value">{{ uptimePercentage }}%</div>
+        <div class="stat-label">Uptime</div>
+      </div>
+
+      <div class="stat-card danger">
+        <div class="stat-icon">🚨</div>
+        <div class="stat-value">{{ alertsCount }}</div>
+        <div class="stat-label">Active Alerts</div>
+      </div>
+    </div>
+
+    <div class="quick-actions">
+      <h2>Quick Actions</h2>
+      <div class="action-buttons">
+        <a routerLink="/endpoints/new" class="btn btn-primary">+ Add Endpoint</a>
+        <button class="btn btn-secondary" (click)="runMonitoring()">🔄 Run Monitoring</button>
+        <a routerLink="/endpoints" class="btn btn-outline">📋 View All Endpoints</a>
+      </div>
+    </div>
+
+    @if (endpoints.length === 0) {
+      <div class="empty-state">
+        <h2>No endpoints yet</h2>
+        <p>Get started by adding your first API endpoint to monitor</p>
+        <a routerLink="/endpoints/new" class="btn btn-primary">Add Your First Endpoint</a>
+      </div>
+    } @else {
+      <div class="endpoints-preview">
+        <h2>Recent Endpoints</h2>
+        <div class="endpoint-list">
+          @for (endpoint of endpoints.slice(0, 5); track endpoint.id) {
+            <div class="endpoint-item">
+              <div class="endpoint-info">
+                <h3>{{ endpoint.url }}</h3>
+                <p>Check interval: {{ endpoint.check_interval }}s | Timeout: {{ endpoint.timeout }}ms</p>
+              </div>
+              <div class="endpoint-actions">
+                <span [class]="endpoint.is_active ? 'badge badge-success' : 'badge badge-danger'">
+                  {{ endpoint.is_active ? 'Active' : 'Inactive' }}
+                </span>
+                <a [routerLink]="['/endpoints', endpoint.id]" class="btn btn-primary btn-sm">View</a>
+              </div>
+            </div>
+          }
+        </div>
+        <a routerLink="/endpoints" class="view-all">View all endpoints →</a>
+      </div>
+    }
+  }
+</div>

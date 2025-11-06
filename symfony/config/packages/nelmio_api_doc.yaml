@@ -1,0 +1,18 @@
+nelmio_api_doc:
+    documentation:
+        info:
+            title: API Performance Monitoring SaaS
+            description: REST API for monitoring API endpoints with real-time analytics
+            version: '1.0.0'
+        components:
+            securitySchemes:
+                BearerAuth:
+                    type: http
+                    scheme: bearer
+                    bearerFormat: JWT
+        security:
+            - BearerAuth: []
+    areas:
+        default:
+            path_patterns: [^/api]
+            host_patterns: [api-monitor-saas]

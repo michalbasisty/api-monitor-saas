@@ -1,0 +1,38 @@
+services:
+  symfony:
+    build: ./symfony
+    volumes:
+      - ./symfony:/var/www/html
+    environment:
+      # Database
+      DATABASE_URL: postgresql://${POSTGRES_USER:-appuser}:${POSTGRES_PASSWORD:-Tygrysdwa2}@postgres:5432/${POSTGRES_DB:-apimon}
+      # JWT
+      JWT_SECRET_KEY: '%kernel.project_dir%/config/jwt/private.pem'
+      JWT_PUBLIC_KEY: '%kernel.project_dir%/config/jwt/public.pem'
+      JWT_PASSPHRASE: ${JWT_PASSPHRASE:-!ChangeMe!}
+      # Mailer
+      MAILER_DSN: ${MAILER_DSN:-null://null}
+      # App
+      APP_ENV: dev
+      APP_SECRET: ${APP_SECRET:-!ChangeThisSecretForProduction!}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  go-api:
+    build: ./go-api
+    environment:
+      GO_ENV: development
+      POSTGRES_HOST: postgres
+      POSTGRES_USER: ${POSTGRES_USER:-appuser}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-Tygrysdwa2}
+      POSTGRES_DB: ${POSTGRES_DB:-apimon}
+      REDIS_HOST: redis
+    expose:
+      - "8080"
+      - "8081" # WebSocket port
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started

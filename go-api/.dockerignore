@@ -1,0 +1,11 @@
+# Ignore Docker and build artifacts
+Dockerfile
+**/*.exe
+**/*.dll
+**/*.so
+**/*.dylib
+/go-api-app
+
+# Ignore vendor and temp files
+vendor
+*.log

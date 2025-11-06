@@ -1,0 +1,108 @@
+<app-navbar></app-navbar>
+
+<div class="container">
+  @if (loading) {
+    <div class="loading">Loading endpoint details...</div>
+  }
+
+  @if (error) {
+    <div class="error-message">{{ error }}</div>
+  }
+
+  @if (endpoint) {
+    <div class="detail-header">
+      <div>
+        <h1>{{ endpoint.url }}</h1>
+        <span [class]="endpoint.is_active ? 'badge badge-success' : 'badge badge-danger'">
+          {{ endpoint.is_active ? 'Active' : 'Inactive' }}
+        </span>
+      </div>
+      <div class="header-actions">
+        <a [routerLink]="['/endpoints', endpoint.id, 'edit']" class="btn btn-primary">Edit Endpoint</a>
+        <a routerLink="/endpoints" class="btn btn-secondary">Back to List</a>
+      </div>
+    </div>
+
+    <div class="info-grid">
+      <div class="card">
+        <h3>Configuration</h3>
+        <div class="info-item">
+          <span class="label">Check Interval:</span>
+          <span class="value">{{ endpoint.check_interval }} seconds</span>
+        </div>
+        <div class="info-item">
+          <span class="label">Timeout:</span>
+          <span class="value">{{ endpoint.timeout }} ms</span>
+        </div>
+        <div class="info-item">
+          <span class="label">Created:</span>
+          <span class="value">{{ endpoint.created_at | date:'short' }}</span>
+        </div>
+      </div>
+
+      @if (stats) {
+        <div class="card">
+          <h3>Statistics (Last 24 Hours)</h3>
+          <div class="info-item">
+            <span class="label">Uptime:</span>
+            <span class="value">{{ stats.uptime_percentage }}%</span>
+          </div>
+          <div class="info-item">
+            <span class="label">Avg Response Time:</span>
+            <span class="value">{{ stats.average_response_time ? (stats.average_response_time + 'ms') : 'N/A' }}</span>
+          </div>
+          @if (stats.latest_check) {
+            <div class="info-item">
+              <span class="label">Last Check:</span>
+              <span class="value">{{ stats.latest_check.checked_at | date:'short' }}</span>
+            </div>
+            <div class="info-item">
+              <span class="label">Last Status:</span>
+              <span [class]="stats.latest_check.is_successful ? 'value success' : 'value error'">
+                {{ stats.latest_check.status_code || 'Failed' }}
+              </span>
+            </div>
+          }
+        </div>
+      }
+    </div>
+
+    @if (results.length > 0) {
+      <div class="card">
+        <h2>Recent Monitoring Results</h2>
+        <div class="results-table">
+          <table>
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>Status Code</th>
+                <th>Response Time</th>
+                <th>Status</th>
+                <th>Error</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (result of results; track result.id) {
+                <tr>
+                  <td>{{ result.checked_at | date:'short' }}</td>
+                  <td>{{ result.status_code || '-' }}</td>
+                  <td>{{ result.response_time ? (result.response_time + 'ms') : '-' }}</td>
+                  <td>
+                    <span [class]="result.is_successful ? 'badge badge-success' : 'badge badge-danger'">
+                      {{ result.is_successful ? 'Success' : 'Failed' }}
+                    </span>
+                  </td>
+                  <td class="error-cell">{{ result.error_message || '-' }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+    } @else {
+      <div class="card empty-state">
+        <p>No monitoring results yet. Checks will appear here once monitoring starts.</p>
+      </div>
+    }
+  }
+</div>

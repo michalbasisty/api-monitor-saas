@@ -1,0 +1,92 @@
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 30px;
+}
+
+.page-header h1 {
+  font-size: 32px;
+  color: #2c3e50;
+}
+
+.endpoint-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+  gap: 20px;
+}
+
+.endpoint-card {
+  padding: 20px;
+}
+
+.endpoint-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  margin-bottom: 15px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid #eee;
+}
+
+.endpoint-header h3 {
+  font-size: 14px;
+  color: #2c3e50;
+  word-break: break-all;
+  flex: 1;
+  margin-right: 10px;
+}
+
+.endpoint-details {
+  margin-bottom: 20px;
+}
+
+.detail-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 0;
+  border-bottom: 1px solid #f5f7fa;
+}
+
+.detail-item .label {
+  font-size: 13px;
+  color: #7f8c8d;
+}
+
+.detail-item .value {
+  font-size: 13px;
+  color: #2c3e50;
+  font-weight: 500;
+}
+
+.endpoint-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.endpoint-actions .btn-sm {
+  flex: 1;
+  text-align: center;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+}
+
+.empty-state h2 {
+  color: #2c3e50;
+  margin-bottom: 10px;
+}
+
+.empty-state p {
+  color: #7f8c8d;
+  margin-bottom: 30px;
+}
+
+.loading {
+  text-align: center;
+  padding: 60px;
+  font-size: 18px;
+  color: #7f8c8d;
+}

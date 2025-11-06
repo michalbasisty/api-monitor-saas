@@ -1,0 +1,62 @@
+<app-navbar></app-navbar>
+
+<div class="container">
+  <div class="page-header">
+    <h1>API Endpoints</h1>
+    <a routerLink="/endpoints/new" class="btn btn-primary">+ Add New Endpoint</a>
+  </div>
+
+  @if (loading) {
+    <div class="loading">Loading endpoints...</div>
+  }
+
+  @if (error) {
+    <div class="error-message">{{ error }}</div>
+  }
+
+  @if (!loading && !error) {
+    @if (endpoints.length === 0) {
+      <div class="empty-state card">
+        <h2>No endpoints configured</h2>
+        <p>Start monitoring your APIs by adding your first endpoint</p>
+        <a routerLink="/endpoints/new" class="btn btn-primary">Add Endpoint</a>
+      </div>
+    } @else {
+      <div class="endpoint-grid">
+        @for (endpoint of endpoints; track endpoint.id) {
+          <div class="endpoint-card card">
+            <div class="endpoint-header">
+              <h3>{{ endpoint.url }}</h3>
+              <span [class]="endpoint.is_active ? 'badge badge-success' : 'badge badge-danger'">
+                {{ endpoint.is_active ? 'Active' : 'Inactive' }}
+              </span>
+            </div>
+            
+            <div class="endpoint-details">
+              <div class="detail-item">
+                <span class="label">Check Interval:</span>
+                <span class="value">{{ endpoint.check_interval }}s</span>
+              </div>
+              <div class="detail-item">
+                <span class="label">Timeout:</span>
+                <span class="value">{{ endpoint.timeout }}ms</span>
+              </div>
+              @if (endpoint.headers) {
+                <div class="detail-item">
+                  <span class="label">Headers:</span>
+                  <span class="value">{{ getHeadersCount(endpoint.headers) }} configured</span>
+                </div>
+              }
+            </div>
+
+            <div class="endpoint-actions">
+              <a [routerLink]="['/endpoints', endpoint.id]" class="btn btn-primary btn-sm">View Details</a>
+              <a [routerLink]="['/endpoints', endpoint.id, 'edit']" class="btn btn-primary btn-sm">Edit</a>
+              <button (click)="deleteEndpoint(endpoint.id)" class="btn btn-danger btn-sm">Delete</button>
+            </div>
+          </div>
+        }
+      </div>
+    }
+  }
+</div>

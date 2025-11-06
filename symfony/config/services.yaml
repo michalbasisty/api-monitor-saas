@@ -1,0 +1,37 @@
+parameters:
+    redis_dsn: 'redis://%env(REDIS_HOST)%:%env(REDIS_PORT)%'
+
+services:
+    # default configuration for services in *this* file
+    _defaults:
+        autowire: true      # Automatically injects dependencies in your services.
+        autoconfigure: true # Automatically registers your services as commands, event subscribers, etc.
+
+    App\Service\StripeService:
+    arguments:
+    $stripeSecretKey: 'sk_test_placeholder_for_development'
+        public: true
+        bind:
+            Predis\Client $redis: '@redis_client'
+
+    # Register a simple native password hasher and alias the Symfony interface
+    App\Security\SimpleUserPasswordHasher: ~
+    Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface: '@App\Security\SimpleUserPasswordHasher'
+
+    # makes classes in src/ available to be used as services
+    # this creates a service per class whose id is the fully-qualified class name
+    App\:
+        resource: '../src/'
+        exclude:
+            - '../src/DependencyInjection/'
+            - '../src/Entity/'
+            - '../src/Kernel.php'
+
+    redis_client:
+        class: Predis\Client
+        arguments:
+            $parameters: '%redis_dsn%'
+
+    App\Service\AuthService:
+        arguments:
+            $emailVerificationService: '@App\Service\EmailVerificationService'

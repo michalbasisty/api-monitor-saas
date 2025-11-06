@@ -1,0 +1,82 @@
+<app-navbar></app-navbar>
+
+<div class="container">
+  <div class="form-container">
+    <h1>{{ isEditMode ? 'Edit Endpoint' : 'Add New Endpoint' }}</h1>
+
+    @if (error) {
+      <div class="error-message">{{ error }}</div>
+    }
+
+    <form [formGroup]="endpointForm" (ngSubmit)="onSubmit()" class="card">
+      <div class="form-group">
+        <label for="url">Endpoint URL *</label>
+        <input
+          id="url"
+          type="text"
+          formControlName="url"
+          class="form-control"
+          placeholder="https://api.example.com/health"
+        />
+        @if (endpointForm.get('url')?.invalid && endpointForm.get('url')?.touched) {
+          <div class="error">Please enter a valid URL</div>
+        }
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label for="check_interval">Check Interval (seconds) *</label>
+          <input
+            id="check_interval"
+            type="number"
+            formControlName="check_interval"
+            class="form-control"
+            min="60"
+          />
+          @if (endpointForm.get('check_interval')?.invalid && endpointForm.get('check_interval')?.touched) {
+            <div class="error">Minimum 60 seconds</div>
+          }
+          <small>How often to check the endpoint (minimum: 60s)</small>
+        </div>
+
+        <div class="form-group">
+          <label for="timeout">Timeout (milliseconds) *</label>
+          <input
+            id="timeout"
+            type="number"
+            formControlName="timeout"
+            class="form-control"
+            min="100"
+            max="30000"
+          />
+          @if (endpointForm.get('timeout')?.invalid && endpointForm.get('timeout')?.touched) {
+            <div class="error">Must be between 100ms and 30000ms</div>
+          }
+          <small>Request timeout (100ms - 30000ms)</small>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="checkbox-label">
+          <input type="checkbox" formControlName="is_active" />
+          <span>Active (endpoint will be monitored)</span>
+        </label>
+      </div>
+
+      <div class="form-actions">
+        <button type="button" (click)="cancel()" class="btn btn-secondary">Cancel</button>
+        <button
+          type="submit"
+          class="btn btn-primary"
+          [disabled]="endpointForm.invalid || loading"
+        >
+          @if (loading) {
+            <span>Saving...</span>
+          } @else {
+            <span>{{ isEditMode ? 'Update Endpoint' : 'Create Endpoint' }}</span>
+          }
+        </button>
+      </div>
+    </form>
+  </div>
+</div>

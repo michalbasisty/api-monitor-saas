@@ -1,0 +1,19 @@
+<nav class="navbar">
+  <div class="navbar-container">
+    <div class="navbar-brand">
+      <a routerLink="/dashboard">🚀 API Monitor</a>
+    </div>
+    
+    @if (authService.isAuthenticated()) {
+      <div class="navbar-menu">
+        <a routerLink="/dashboard" routerLinkActive="active">Dashboard</a>
+        <a routerLink="/endpoints" routerLinkActive="active">Endpoints</a>
+        
+        <div class="navbar-user">
+          <span class="user-email">{{ authService.currentUser()?.email }}</span>
+          <button (click)="logout()" class="btn btn-danger btn-sm">Logout</button>
+        </div>
+      </div>
+    }
+  </div>
+</nav>

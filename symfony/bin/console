@@ -1,0 +1,17 @@
+#!/usr/bin/env php
+<?php
+// Minimal Symfony 6+ console bootstrap compatible with autoload_runtime.php
+// It returns a callable expected by vendor/autoload_runtime.php
+use App\Kernel;
+use Symfony\Bundle\FrameworkBundle\Console\Application;
+
+require __DIR__.'/../vendor/autoload_runtime.php';
+
+return function (array $context = []) {
+	$env = $context['APP_ENV'] ?? ($_SERVER['APP_ENV'] ?? 'dev');
+	$debug = isset($context['APP_DEBUG']) ? (bool) $context['APP_DEBUG'] : (isset($_SERVER['APP_DEBUG']) ? (bool) $_SERVER['APP_DEBUG'] : ('prod' !== $env));
+
+	$kernel = new Kernel($env, $debug);
+	$application = new Application($kernel);
+	$application->run();
+};

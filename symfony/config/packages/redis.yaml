@@ -1,0 +1,11 @@
+# Redis Configuration
+parameters:
+    redis_host: '%env(REDIS_HOST)%'
+    redis_port: '%env(REDIS_PORT)%'
+
+services:
+    Redis:
+        class: Predis\Client
+        arguments:
+            - host: '%redis_host%'
+              port: '%redis_port%'
