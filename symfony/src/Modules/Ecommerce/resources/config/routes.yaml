@@ -1,0 +1,84 @@
+ecommerce_stores:
+  path: /api/ecommerce/stores
+  controller: App\Modules\Ecommerce\Controller\StoreController::list
+  methods: GET
+
+ecommerce_store_create:
+  path: /api/ecommerce/stores
+  controller: App\Modules\Ecommerce\Controller\StoreController::create
+  methods: POST
+
+ecommerce_store_get:
+  path: /api/ecommerce/stores/{id}
+  controller: App\Modules\Ecommerce\Controller\StoreController::get
+  methods: GET
+
+ecommerce_store_update:
+  path: /api/ecommerce/stores/{id}
+  controller: App\Modules\Ecommerce\Controller\StoreController::update
+  methods: PUT
+
+ecommerce_store_health:
+  path: /api/ecommerce/stores/{id}/health
+  controller: App\Modules\Ecommerce\Controller\StoreController::health
+  methods: GET
+
+ecommerce_checkout_steps:
+  path: /api/ecommerce/stores/{storeId}/checkout-steps
+  controller: App\Modules\Ecommerce\Controller\CheckoutController::listSteps
+  methods: GET
+
+ecommerce_checkout_add_step:
+  path: /api/ecommerce/stores/{storeId}/checkout-steps
+  controller: App\Modules\Ecommerce\Controller\CheckoutController::addStep
+  methods: POST
+
+ecommerce_checkout_realtime:
+  path: /api/ecommerce/stores/{storeId}/checkout/realtime
+  controller: App\Modules\Ecommerce\Controller\CheckoutController::realtime
+  methods: GET
+
+ecommerce_checkout_performance:
+  path: /api/ecommerce/stores/{storeId}/checkout/performance
+  controller: App\Modules\Ecommerce\Controller\CheckoutController::performance
+  methods: GET
+
+ecommerce_sales_realtime:
+  path: /api/ecommerce/stores/{storeId}/sales/realtime
+  controller: App\Modules\Ecommerce\Controller\SalesController::realtime
+  methods: GET
+
+ecommerce_sales_lost_revenue:
+  path: /api/ecommerce/stores/{storeId}/sales/lost-revenue
+  controller: App\Modules\Ecommerce\Controller\SalesController::lostRevenue
+  methods: GET
+
+ecommerce_payment_gateways:
+  path: /api/ecommerce/stores/{storeId}/payment-gateways
+  controller: App\Modules\Ecommerce\Controller\PaymentController::listGateways
+  methods: GET
+
+ecommerce_payment_add_gateway:
+  path: /api/ecommerce/stores/{storeId}/payment-gateways
+  controller: App\Modules\Ecommerce\Controller\PaymentController::addGateway
+  methods: POST
+
+ecommerce_payment_metrics:
+  path: /api/ecommerce/stores/{storeId}/payment-metrics
+  controller: App\Modules\Ecommerce\Controller\PaymentController::metrics
+  methods: GET
+
+ecommerce_alerts:
+  path: /api/ecommerce/stores/{storeId}/alerts
+  controller: App\Modules\Ecommerce\Controller\AlertController::list
+  methods: GET
+
+ecommerce_alert_create:
+  path: /api/ecommerce/stores/{storeId}/alerts
+  controller: App\Modules\Ecommerce\Controller\AlertController::create
+  methods: POST
+
+ecommerce_webhook_payment:
+  path: /api/ecommerce/webhooks/payment
+  controller: App\Modules\Ecommerce\Controller\WebhookController::payment
+  methods: POST

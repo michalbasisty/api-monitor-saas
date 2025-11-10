@@ -1,0 +1,46 @@
+# Multi-stage build for metrics worker
+FROM golang:1.21-alpine AS builder
+
+WORKDIR /app
+
+# Install dependencies
+RUN apk add --no-cache git gcc musl-dev
+
+# Copy go mod files
+COPY go.mod go.sum ./
+
+# Download dependencies
+RUN go mod download
+
+# Copy source code
+COPY . .
+
+# Build the metrics collector
+RUN CGO_ENABLED=1 GOOS=linux go build \
+    -a -installsuffix cgo \
+    -ldflags="-w -s" \
+    -o bin/collect-metrics \
+    ./cmd/collect-metrics
+
+# Runtime stage
+FROM alpine:latest
+
+WORKDIR /app
+
+# Install ca-certificates for HTTPS
+RUN apk --no-cache add ca-certificates
+
+# Copy binary from builder
+COPY --from=builder /app/bin/collect-metrics /app/bin/collect-metrics
+
+# Create non-root user
+RUN addgroup -g 1000 metrics && \
+    adduser -D -u 1000 -G metrics metrics
+
+USER metrics
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD stat /app/bin/collect-metrics || exit 1
+
+ENTRYPOINT ["/app/bin/collect-metrics"]

@@ -1,0 +1,135 @@
+ecommerce_stores_list:
+  path: /api/ecommerce/stores
+  controller: App\Modules\Ecommerce\Controller\StoreController::list
+  methods: GET
+
+ecommerce_store_create:
+  path: /api/ecommerce/stores
+  controller: App\Modules\Ecommerce\Controller\StoreController::create
+  methods: POST
+
+ecommerce_store_get:
+  path: /api/ecommerce/stores/{id}
+  controller: App\Modules\Ecommerce\Controller\StoreController::get
+  methods: GET
+  requirements:
+    id: '[a-f0-9\-]+'
+
+ecommerce_store_update:
+  path: /api/ecommerce/stores/{id}
+  controller: App\Modules\Ecommerce\Controller\StoreController::update
+  methods: PUT
+  requirements:
+    id: '[a-f0-9\-]+'
+
+ecommerce_store_delete:
+  path: /api/ecommerce/stores/{id}
+  controller: App\Modules\Ecommerce\Controller\StoreController::delete
+  methods: DELETE
+  requirements:
+    id: '[a-f0-9\-]+'
+
+ecommerce_store_health:
+  path: /api/ecommerce/stores/{id}/health
+  controller: App\Modules\Ecommerce\Controller\StoreController::health
+  methods: GET
+  requirements:
+    id: '[a-f0-9\-]+'
+
+ecommerce_checkout_steps_list:
+  path: /api/ecommerce/stores/{storeId}/checkout-steps
+  controller: App\Modules\Ecommerce\Controller\CheckoutController::listSteps
+  methods: GET
+  requirements:
+    storeId: '[a-f0-9\-]+'
+
+ecommerce_checkout_step_create:
+  path: /api/ecommerce/stores/{storeId}/checkout-steps
+  controller: App\Modules\Ecommerce\Controller\CheckoutController::addStep
+  methods: POST
+  requirements:
+    storeId: '[a-f0-9\-]+'
+
+ecommerce_checkout_step_update:
+  path: /api/ecommerce/stores/{storeId}/checkout-steps/{stepId}
+  controller: App\Modules\Ecommerce\Controller\CheckoutController::updateStep
+  methods: PUT
+  requirements:
+    storeId: '[a-f0-9\-]+'
+    stepId: '[a-f0-9\-]+'
+
+ecommerce_checkout_step_delete:
+  path: /api/ecommerce/stores/{storeId}/checkout-steps/{stepId}
+  controller: App\Modules\Ecommerce\Controller\CheckoutController::deleteStep
+  methods: DELETE
+  requirements:
+    storeId: '[a-f0-9\-]+'
+    stepId: '[a-f0-9\-]+'
+
+ecommerce_checkout_realtime:
+  path: /api/ecommerce/stores/{storeId}/checkout/realtime
+  controller: App\Modules\Ecommerce\Controller\CheckoutController::realtime
+  methods: GET
+  requirements:
+    storeId: '[a-f0-9\-]+'
+
+ecommerce_checkout_performance:
+  path: /api/ecommerce/stores/{storeId}/checkout/performance
+  controller: App\Modules\Ecommerce\Controller\CheckoutController::performance
+  methods: GET
+  requirements:
+    storeId: '[a-f0-9\-]+'
+
+ecommerce_payment_gateways_list:
+  path: /api/ecommerce/stores/{storeId}/payment-gateways
+  controller: App\Modules\Ecommerce\Controller\PaymentController::listGateways
+  methods: GET
+  requirements:
+    storeId: '[a-f0-9\-]+'
+
+ecommerce_payment_gateway_add:
+  path: /api/ecommerce/stores/{storeId}/payment-gateways
+  controller: App\Modules\Ecommerce\Controller\PaymentController::addGateway
+  methods: POST
+  requirements:
+    storeId: '[a-f0-9\-]+'
+
+ecommerce_payment_metrics:
+  path: /api/ecommerce/stores/{storeId}/payment-metrics
+  controller: App\Modules\Ecommerce\Controller\PaymentController::metrics
+  methods: GET
+  requirements:
+    storeId: '[a-f0-9\-]+'
+
+ecommerce_sales_realtime:
+  path: /api/ecommerce/stores/{storeId}/sales/realtime
+  controller: App\Modules\Ecommerce\Controller\SalesController::realtime
+  methods: GET
+  requirements:
+    storeId: '[a-f0-9\-]+'
+
+ecommerce_sales_lost_revenue:
+  path: /api/ecommerce/stores/{storeId}/sales/lost-revenue
+  controller: App\Modules\Ecommerce\Controller\SalesController::lostRevenue
+  methods: GET
+  requirements:
+    storeId: '[a-f0-9\-]+'
+
+ecommerce_alerts_list:
+  path: /api/ecommerce/stores/{storeId}/alerts
+  controller: App\Modules\Ecommerce\Controller\AlertController::list
+  methods: GET
+  requirements:
+    storeId: '[a-f0-9\-]+'
+
+ecommerce_alert_create:
+  path: /api/ecommerce/stores/{storeId}/alerts
+  controller: App\Modules\Ecommerce\Controller\AlertController::create
+  methods: POST
+  requirements:
+    storeId: '[a-f0-9\-]+'
+
+ecommerce_webhook_stripe:
+  path: /api/ecommerce/webhooks/stripe
+  controller: App\Modules\Ecommerce\Controller\WebhookController::stripe
+  methods: POST

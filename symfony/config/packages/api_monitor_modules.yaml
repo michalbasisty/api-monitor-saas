@@ -1,0 +1,119 @@
+services:
+  App\Kernel\ModuleRegistry:
+    arguments:
+      - '@service_container'
+      - '@doctrine.orm.entity_manager'
+    public: true
+
+  App\Middleware\ModuleAccessMiddleware:
+    decorates: http_kernel
+    arguments:
+      - '@App\Middleware\ModuleAccessMiddleware.inner'
+      - '@App\Kernel\ModuleRegistry'
+
+  App\Repository\UserModuleSubscriptionRepository:
+    tags:
+      - { name: doctrine.repository_service }
+
+  # E-Commerce Module Services
+  App\Modules\Ecommerce\Service\StoreService:
+    arguments:
+      - '@doctrine.orm.entity_manager'
+    public: true
+
+  App\Modules\Ecommerce\Service\CheckoutService:
+    arguments:
+      - '@doctrine.orm.entity_manager'
+    public: true
+
+  App\Modules\Ecommerce\Service\PaymentService:
+    arguments:
+      - '@doctrine.orm.entity_manager'
+    public: true
+
+  App\Modules\Ecommerce\Service\SalesMetricsService:
+    arguments:
+      - '@doctrine.orm.entity_manager'
+    public: true
+
+  App\Modules\Ecommerce\Service\StripeService:
+    arguments:
+      - '@doctrine.orm.entity_manager'
+      - '@logger'
+      - '%env(STRIPE_WEBHOOK_SECRET)%'
+    public: true
+
+  # E-Commerce Repositories
+  App\Modules\Ecommerce\Repository\StoreRepository:
+    tags:
+      - { name: doctrine.repository_service }
+
+  App\Modules\Ecommerce\Repository\CheckoutStepRepository:
+    tags:
+      - { name: doctrine.repository_service }
+
+  App\Modules\Ecommerce\Repository\PaymentGatewayRepository:
+    tags:
+      - { name: doctrine.repository_service }
+
+  App\Modules\Ecommerce\Repository\SalesMetricRepository:
+    tags:
+      - { name: doctrine.repository_service }
+
+  App\Modules\Ecommerce\Repository\AlertRepository:
+    tags:
+      - { name: doctrine.repository_service }
+
+  # E-Commerce Controllers
+  App\Modules\Ecommerce\Controller\StoreController:
+    arguments:
+      - '@App\Modules\Ecommerce\Repository\StoreRepository'
+      - '@App\Modules\Ecommerce\Service\StoreService'
+      - '@doctrine.orm.entity_manager'
+      - '@logger'
+    tags:
+      - { name: controller.service_arguments }
+
+  App\Modules\Ecommerce\Controller\CheckoutController:
+    arguments:
+      - '@App\Modules\Ecommerce\Repository\StoreRepository'
+      - '@App\Modules\Ecommerce\Repository\CheckoutStepRepository'
+      - '@App\Modules\Ecommerce\Service\CheckoutService'
+      - '@doctrine.orm.entity_manager'
+      - '@logger'
+    tags:
+      - { name: controller.service_arguments }
+
+  App\Modules\Ecommerce\Controller\PaymentController:
+    arguments:
+      - '@App\Modules\Ecommerce\Repository\StoreRepository'
+      - '@App\Modules\Ecommerce\Repository\PaymentGatewayRepository'
+      - '@App\Modules\Ecommerce\Service\PaymentService'
+      - '@doctrine.orm.entity_manager'
+      - '@logger'
+    tags:
+      - { name: controller.service_arguments }
+
+  App\Modules\Ecommerce\Controller\SalesController:
+    arguments:
+      - '@App\Modules\Ecommerce\Repository\StoreRepository'
+      - '@App\Modules\Ecommerce\Service\SalesMetricsService'
+      - '@logger'
+    tags:
+      - { name: controller.service_arguments }
+
+  App\Modules\Ecommerce\Controller\AlertController:
+    arguments:
+      - '@App\Modules\Ecommerce\Repository\StoreRepository'
+      - '@App\Modules\Ecommerce\Repository\AlertRepository'
+      - '@doctrine.orm.entity_manager'
+      - '@logger'
+    tags:
+      - { name: controller.service_arguments }
+
+  App\Modules\Ecommerce\Controller\WebhookController:
+    arguments:
+      - '@App\Modules\Ecommerce\Service\StripeService'
+      - '@logger'
+    tags:
+      - { name: controller.service_arguments }
