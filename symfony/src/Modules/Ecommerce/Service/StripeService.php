@@ -19,14 +19,18 @@ class StripeService
     private string $stripeSecretKey;
     private string $stripeWebhookSecret;
 
+    private AlertingService $alertingService;
+
     public function __construct(
         EntityManagerInterface $em,
         LoggerInterface $logger,
+        AlertingService $alertingService,
         string $stripeSecretKey = '',
         string $stripeWebhookSecret = ''
     ) {
         $this->em = $em;
         $this->logger = $logger;
+        $this->alertingService = $alertingService;
         $this->stripeSecretKey = $stripeSecretKey;
         $this->stripeWebhookSecret = $stripeWebhookSecret;
 
@@ -142,6 +146,8 @@ class StripeService
 
         // Check if payment success rate dropped
         $this->checkPaymentSuccessRate($paymentGateway);
+
+        return true;
     }
 
     /**
@@ -180,7 +186,9 @@ class StripeService
         ]);
 
         // Alert on payment failure
-        $this->alertPaymentFailure($paymentGateway, $chargeData);
+        $this->alertingService->alertPaymentFailure($paymentGateway, $chargeData);
+
+        return true;
     }
 
     /**
@@ -228,7 +236,7 @@ class StripeService
         $paymentGateway = $metric->getGateway();
 
         // Alert on chargeback
-        $this->alertChargeback($paymentGateway, $disputeData);
+        $this->alertingService->alertChargeback($paymentGateway, $disputeData);
 
         $this->logger->warning('Chargeback filed', [
             'transaction_id' => $chargeId,
@@ -330,92 +338,8 @@ class StripeService
 
         // Alert if success rate < 95%
         if ($successRate < 95) {
-            $this->alertLowPaymentSuccessRate($gateway, $successRate);
+            $this->alertingService->alertLowPaymentSuccessRate($gateway, $successRate);
         }
-    }
-
-    /**
-     * Trigger alert for payment failure
-     */
-    private function alertPaymentFailure(PaymentGateway $gateway, array $chargeData): void
-    {
-        $alert = new EcommerceAlert();
-        $alert->setStore($gateway->getStore());
-        $alert->setAlertType('payment_failed');
-        $alert->setSeverity('high');
-        $alert->setTriggeredAt(new \DateTime());
-        $alert->setDescription(
-            "Payment declined: " . ($chargeData['failure_message'] ?? $chargeData['failure_code'] ?? 'unknown error')
-        );
-
-        $this->em->persist($alert);
-        $this->em->flush();
-
-        $this->logger->warning('Payment failure alert triggered', [
-            'store_id' => $gateway->getStore()->getId(),
-            'gateway_id' => $gateway->getId(),
-        ]);
-    }
-
-    /**
-     * Trigger alert for low payment success rate
-     */
-    private function alertLowPaymentSuccessRate(PaymentGateway $gateway, float $rate): void
-    {
-        // Check if we already have an active alert for this
-        $existingAlert = $this->em->getRepository(EcommerceAlert::class)
-            ->findOneBy([
-                'store' => $gateway->getStore(),
-                'alertType' => 'low_payment_success_rate',
-                'resolvedAt' => null,
-            ]);
-
-        if ($existingAlert) {
-            // Update existing alert
-            $existingAlert->setMetricValue($rate);
-            $this->em->flush();
-            return;
-        }
-
-        $alert = new EcommerceAlert();
-        $alert->setStore($gateway->getStore());
-        $alert->setAlertType('low_payment_success_rate');
-        $alert->setSeverity('critical');
-        $alert->setTriggeredAt(new \DateTime());
-        $alert->setMetricValue($rate);
-        $alert->setThresholdValue(95);
-        $alert->setDescription("Payment success rate below threshold: {$rate}%");
-
-        $this->em->persist($alert);
-        $this->em->flush();
-
-        $this->logger->critical('Low payment success rate alert triggered', [
-            'store_id' => $gateway->getStore()->getId(),
-            'success_rate' => $rate,
-        ]);
-    }
-
-    /**
-     * Trigger alert for chargeback
-     */
-    private function alertChargeback(PaymentGateway $gateway, array $disputeData): void
-    {
-        $alert = new EcommerceAlert();
-        $alert->setStore($gateway->getStore());
-        $alert->setAlertType('chargeback');
-        $alert->setSeverity('critical');
-        $alert->setTriggeredAt(new \DateTime());
-        $alert->setDescription(
-            "Chargeback filed: " . ($disputeData['reason'] ?? 'unknown reason')
-        );
-
-        $this->em->persist($alert);
-        $this->em->flush();
-
-        $this->logger->critical('Chargeback alert triggered', [
-            'store_id' => $gateway->getStore()->getId(),
-            'dispute_id' => $disputeData['id'] ?? 'unknown',
-        ]);
     }
 
     /**

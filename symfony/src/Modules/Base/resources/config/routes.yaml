@@ -1,0 +1,7 @@
+# Base Module Routes - Core monitoring endpoints
+# Routes are loaded automatically from controllers with Symfony attributes
+
+base_controllers:
+  resource: ../../Controller/
+  namespace: App\Modules\Base\Controller
+  type: attribute

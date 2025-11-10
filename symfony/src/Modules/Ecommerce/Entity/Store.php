@@ -2,12 +2,13 @@
 
 namespace App\Modules\Ecommerce\Entity;
 
+use App\Modules\Ecommerce\Repository\StoreRepository;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Uid\Uuid;
 use App\Entity\User;
 
-#[ORM\Entity]
+#[ORM\Entity(repositoryClass: StoreRepository::class)]
 #[ORM\Table(name: 'ecommerce_stores')]
 class Store
 {

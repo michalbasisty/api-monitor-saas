@@ -7,7 +7,9 @@ use App\Modules\Base\BaseModule;
 use App\Modules\Ecommerce\EcommerceModule;
 use Symfony\Bundle\FrameworkBundle\Kernel\MicroKernelTrait;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
+use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
 use Symfony\Component\HttpKernel\Kernel as BaseKernel;
+use Symfony\Component\Routing\Loader\Configurator\RoutingConfigurator;
 
 class Kernel extends BaseKernel
 {
@@ -39,5 +41,29 @@ class Kernel extends BaseKernel
 
         // Register optional modules
         $moduleRegistry->register(new EcommerceModule());
+    }
+
+    protected function configureContainer(ContainerConfigurator $container): void
+    {
+        $container->import('../config/{packages}/*.yaml');
+        $container->import('../config/services.yaml');
+    }
+
+    protected function configureRoutes(RoutingConfigurator $routes): void
+    {
+        // Load main API routes
+        $routes->import('../config/routes.yaml');
+        
+        // Load module routes dynamically after boot
+        if ($this->container->has(ModuleRegistry::class)) {
+            $moduleRegistry = $this->container->get(ModuleRegistry::class);
+            
+            foreach ($moduleRegistry->getAllModules() as $module) {
+                $routesPath = $module->getRoutesPath();
+                if (file_exists($routesPath)) {
+                    $routes->import($routesPath);
+                }
+            }
+        }
     }
 }
