@@ -2,61 +2,80 @@
 
 namespace App\Modules\Ecommerce\Controller;
 
-use App\Modules\Ecommerce\Entity\PaymentMetric;
-use App\Modules\Ecommerce\Entity\Store;
-use Doctrine\ORM\EntityManagerInterface;
+use App\Modules\Ecommerce\Service\StripeService;
+use Psr\Log\LoggerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 
 #[Route('/api/ecommerce/webhooks')]
 class WebhookController extends AbstractController
 {
-    public function __construct(private EntityManagerInterface $em)
-    {
+    public function __construct(
+        private StripeService $stripeService,
+        private LoggerInterface $logger
+    ) {
     }
 
-    #[Route('/payment', name: 'ecommerce_webhook_payment', methods: ['POST'])]
-    public function payment(Request $request): JsonResponse
+    #[Route('/stripe', name: 'ecommerce_webhook_stripe', methods: ['POST'])]
+    public function stripe(Request $request): Response
     {
-        $data = json_decode($request->getContent(), true);
+        $payload = $request->getContent();
+        $signature = $request->headers->get('Stripe-Signature');
 
-        // TODO: Verify webhook signature (Stripe, PayPal, Square, etc.)
-        // This is a placeholder implementation
-
-        if (!isset($data['store_id']) || !isset($data['transaction_id'])) {
-            return $this->json(['error' => 'Missing required fields'], 400);
+        if (!$signature) {
+            $this->logger->error('Stripe webhook received without signature');
+            return new Response('Unauthorized', Response::HTTP_401_UNAUTHORIZED);
         }
 
         try {
-            $store = $this->em->getRepository(Store::class)->find($data['store_id']);
-            if (!$store) {
-                return $this->json(['error' => 'Store not found'], 404);
-            }
+            // Verify and parse webhook
+            $event = $this->stripeService->processWebhook($payload, $signature);
 
-            // Find or create payment metric
-            $metric = $this->em->getRepository(PaymentMetric::class)
-                ->createQueryBuilder('m')
-                ->where('m.transactionId = :transactionId')
-                ->setParameter('transactionId', $data['transaction_id'])
-                ->getQuery()
-                ->getOneOrNullResult();
+            // Handle different event types
+            match ($event->type) {
+                'charge.succeeded' => $this->stripeService->handleChargeSucceeded($event->data->toArray()),
+                'charge.failed' => $this->stripeService->handleChargeFailed($event->data->toArray()),
+                'charge.refunded' => $this->stripeService->handleChargeRefunded($event->data->toArray()),
+                'charge.dispute.created' => $this->stripeService->handleChargeDispute($event->data->toArray()),
+                'payment_intent.succeeded' => $this->stripeService->handlePaymentIntentSucceeded($event->data->toArray()),
+                default => null,
+            };
 
-            if ($metric) {
-                $metric->setWebhookReceived(true);
-                $metric->setWebhookTimestamp(new \DateTime());
-                $metric->setStatus($data['status'] ?? $metric->getStatus());
-
-                $this->em->flush();
-            }
-
-            return $this->json([
-                'success' => true,
-                'transaction_id' => $data['transaction_id'],
+            $this->logger->info('Stripe webhook processed', [
+                'event_type' => $event->type,
+                'event_id' => $event->id,
             ]);
+
+            return new Response('Webhook processed', Response::HTTP_200_OK);
+
         } catch (\Exception $e) {
-            return $this->json(['error' => $e->getMessage()], 500);
+            $this->logger->error('Webhook processing failed', [
+                'error' => $e->getMessage(),
+                'event_type' => $event->type ?? 'unknown',
+            ]);
+
+            // Always return 200 to prevent Stripe from retrying
+            // But log the error for investigation
+            return new Response('Error logged', Response::HTTP_200_OK);
         }
+    }
+
+    #[Route('/paypal', name: 'ecommerce_webhook_paypal', methods: ['POST'])]
+    public function paypal(Request $request): Response
+    {
+        // TODO: Implement PayPal webhook handling
+        $this->logger->info('PayPal webhook received (not yet implemented)');
+        return new Response('OK', Response::HTTP_200_OK);
+    }
+
+    #[Route('/square', name: 'ecommerce_webhook_square', methods: ['POST'])]
+    public function square(Request $request): Response
+    {
+        // TODO: Implement Square webhook handling
+        $this->logger->info('Square webhook received (not yet implemented)');
+        return new Response('OK', Response::HTTP_200_OK);
     }
 }
