@@ -174,6 +174,8 @@ class StripeService
         $metric->setAmount($chargeData['amount'] / 100);
         $metric->setCurrency(strtoupper($chargeData['currency']));
         $metric->setStatus('declined');
+        $metric->setFailureReason($chargeData['failure_code'] ?? 'unknown');
+        $metric->setFailureMessage($chargeData['failure_message'] ?? 'Payment declined');
         $metric->setWebhookReceived(true);
         $metric->setWebhookTimestamp(new \DateTime());
 
@@ -183,12 +185,11 @@ class StripeService
         $this->logger->warning('Payment failed recorded', [
             'transaction_id' => $chargeData['id'],
             'failure_code' => $chargeData['failure_code'] ?? 'unknown',
+            'failure_message' => $chargeData['failure_message'] ?? 'unknown',
         ]);
 
         // Alert on payment failure
         $this->alertingService->alertPaymentFailure($paymentGateway, $chargeData);
-
-        return true;
     }
 
     /**
@@ -302,12 +303,25 @@ class StripeService
     }
 
     /**
-     * Estimate settlement time in hours (typically 2 business days = 48 hours)
-     */
+    * Estimate settlement time in hours (typically 2 business days = 48 hours)
+    * Accounts for weekends
+    */
     private function estimateSettlementTime(): int
     {
-        // Default: 2 business days = 48 hours
-        return 48;
+       $settlementDate = new \DateTime('now', new \DateTimeZone('UTC'));
+    $settlementDate->add(new \DateInterval('P2D')); // Add 2 days
+
+    // Skip weekends (6 = Saturday, 7 = Sunday)
+    while ($settlementDate->format('N') >= 6) {
+    $settlementDate->add(new \DateInterval('P1D'));
+    }
+
+    // Calculate hours difference
+    $now = new \DateTime('now', new \DateTimeZone('UTC'));
+    $interval = $now->diff($settlementDate);
+
+    $hours = ($interval->days * 24) + $interval->h;
+    return max($hours, 48); // Minimum 48 hours
     }
 
     /**

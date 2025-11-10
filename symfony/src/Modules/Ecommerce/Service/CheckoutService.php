@@ -2,6 +2,8 @@
 
 namespace App\Modules\Ecommerce\Service;
 
+use App\Exception\StoreNotFoundException;
+use App\Modules\Ecommerce\Entity\CheckoutMetric;
 use App\Modules\Ecommerce\Entity\CheckoutStep;
 use App\Modules\Ecommerce\Entity\Store;
 use Doctrine\ORM\EntityManagerInterface;
@@ -10,6 +12,15 @@ class CheckoutService
 {
     public function __construct(private EntityManagerInterface $em)
     {
+    }
+
+    public function getStoreById(string $storeId): Store
+    {
+        $store = $this->em->getRepository(Store::class)->find($storeId);
+        if (!$store) {
+            throw new StoreNotFoundException($storeId);
+        }
+        return $store;
     }
 
     public function addCheckoutStep(Store $store, array $data): CheckoutStep
@@ -32,6 +43,18 @@ class CheckoutService
     {
         return $this->em->getRepository(CheckoutStep::class)
             ->findBy(['store' => $store], ['stepNumber' => 'ASC']);
+    }
+
+    public function getRealtimeMetrics(Store $store, int $limit = 100): array
+    {
+        return $this->em->getRepository(CheckoutMetric::class)
+            ->createQueryBuilder('m')
+            ->where('m.store = :store')
+            ->setParameter('store', $store)
+            ->orderBy('m.timestamp', 'DESC')
+            ->setMaxResults($limit)
+            ->getQuery()
+            ->getResult();
     }
 
     public function updateCheckoutStep(CheckoutStep $step, array $data): CheckoutStep

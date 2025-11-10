@@ -2,6 +2,7 @@
 
 namespace App\Modules\Ecommerce\Service;
 
+use App\Exception\StoreNotFoundException;
 use App\Modules\Ecommerce\Entity\SalesMetric;
 use App\Modules\Ecommerce\Entity\Store;
 use Doctrine\ORM\EntityManagerInterface;
@@ -10,6 +11,15 @@ class SalesMetricsService
 {
     public function __construct(private EntityManagerInterface $em)
     {
+    }
+
+    public function getStoreById(string $storeId): Store
+    {
+        $store = $this->em->getRepository(Store::class)->find($storeId);
+        if (!$store) {
+            throw new StoreNotFoundException($storeId);
+        }
+        return $store;
     }
 
     public function recordSalesMetric(Store $store, array $data): SalesMetric

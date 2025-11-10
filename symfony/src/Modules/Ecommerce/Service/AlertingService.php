@@ -2,6 +2,7 @@
 
 namespace App\Modules\Ecommerce\Service;
 
+use App\Exception\StoreNotFoundException;
 use App\Modules\Ecommerce\Entity\EcommerceAlert;
 use App\Modules\Ecommerce\Entity\PaymentGateway;
 use App\Modules\Ecommerce\Entity\Store;
@@ -19,6 +20,18 @@ class AlertingService
         private EntityManagerInterface $em,
         private LoggerInterface $logger
     ) {}
+
+    /**
+     * Get store by ID
+     */
+    public function getStoreById(string $storeId): Store
+    {
+        $store = $this->em->getRepository(Store::class)->find($storeId);
+        if (!$store) {
+            throw new StoreNotFoundException($storeId);
+        }
+        return $store;
+    }
 
     /**
      * Create payment failure alert
@@ -165,12 +178,51 @@ class AlertingService
     }
 
     /**
+     * Create a manual alert
+     */
+    public function createManualAlert(
+        Store $store,
+        string $alertType,
+        string $severity,
+        ?float $metricValue = null,
+        ?float $thresholdValue = null,
+        ?string $description = null
+    ): EcommerceAlert {
+        $alert = new EcommerceAlert();
+        $alert->setStore($store);
+        $alert->setAlertType($alertType);
+        $alert->setSeverity($severity);
+        $alert->setTriggeredAt(new \DateTime());
+        $alert->setMetricValue($metricValue);
+        $alert->setThresholdValue($thresholdValue);
+        $alert->setDescription($description);
+
+        $this->em->persist($alert);
+        $this->em->flush();
+
+        return $alert;
+    }
+
+    /**
      * Resolve an alert
      */
-    public function resolveAlert(EcommerceAlert $alert): void
+    public function resolveAlert(string $alertId, Store $store): EcommerceAlert
     {
+        $alert = $this->em->getRepository(EcommerceAlert::class)
+            ->createQueryBuilder('a')
+            ->where('a.id = :id')
+            ->andWhere('a.store = :store')
+            ->setParameter('id', $alertId)
+            ->setParameter('store', $store)
+            ->getQuery()
+            ->getOneOrNullResult();
+
+        if (!$alert) {
+            throw new \Exception("Alert not found");
+        }
+
         if ($alert->getResolvedAt() !== null) {
-            return; // Already resolved
+            return $alert; // Already resolved
         }
 
         $alert->setResolvedAt(new \DateTime());
@@ -180,6 +232,8 @@ class AlertingService
             'alert_id' => $alert->getId(),
             'alert_type' => $alert->getAlertType(),
         ]);
+
+        return $alert;
     }
 
     /**
@@ -191,5 +245,33 @@ class AlertingService
     {
         return $this->em->getRepository(EcommerceAlert::class)
             ->findBy(['store' => $store, 'resolvedAt' => null], ['triggeredAt' => 'DESC']);
+    }
+
+    /**
+     * Get resolved alerts for a store
+     * 
+     * @return EcommerceAlert[]
+     */
+    public function getResolvedAlerts(Store $store): array
+    {
+        return $this->em->getRepository(EcommerceAlert::class)
+            ->createQueryBuilder('a')
+            ->where('a.store = :store')
+            ->andWhere('a.resolvedAt IS NOT NULL')
+            ->setParameter('store', $store)
+            ->orderBy('a.triggeredAt', 'DESC')
+            ->getQuery()
+            ->getResult();
+    }
+
+    /**
+     * Get all alerts for a store
+     * 
+     * @return EcommerceAlert[]
+     */
+    public function getAllAlerts(Store $store): array
+    {
+        return $this->em->getRepository(EcommerceAlert::class)
+            ->findBy(['store' => $store], ['triggeredAt' => 'DESC']);
     }
 }
