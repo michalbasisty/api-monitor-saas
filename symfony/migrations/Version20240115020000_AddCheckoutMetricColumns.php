@@ -18,7 +18,7 @@ final class Version20240115020000_AddCheckoutMetricColumns extends AbstractMigra
     {
         $this->addSql('ALTER TABLE ecommerce_checkout_metrics ADD COLUMN conversion_rate DECIMAL(5, 2) DEFAULT NULL');
         $this->addSql('ALTER TABLE ecommerce_checkout_metrics ADD COLUMN abandonment_rate DECIMAL(5, 2) DEFAULT NULL');
-        $this->addSql('ALTER TABLE ecommerce_checkout_metrics ADD COLUMN session_abandoned TINYINT(1) NOT NULL DEFAULT 0');
+        $this->addSql('ALTER TABLE ecommerce_checkout_metrics ADD COLUMN session_abandoned BOOLEAN NOT NULL DEFAULT FALSE');
     }
 
     public function down(Schema $schema): void

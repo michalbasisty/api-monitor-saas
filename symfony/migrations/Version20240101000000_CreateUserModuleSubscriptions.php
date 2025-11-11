@@ -17,17 +17,16 @@ final class Version20240101000000_CreateUserModuleSubscriptions extends Abstract
     public function up(Schema $schema): void
     {
         $this->addSql('CREATE TABLE user_module_subscriptions (
-            id INT AUTO_INCREMENT NOT NULL,
-            user_id CHAR(36) NOT NULL COMMENT "(DC2Type:uuid)",
+            id SERIAL PRIMARY KEY,
+            user_id UUID NOT NULL,
             module_name VARCHAR(50) NOT NULL,
             tier VARCHAR(20) NOT NULL,
-            enabled TINYINT(1) NOT NULL DEFAULT 0,
-            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            updated_at DATETIME DEFAULT NULL,
-            PRIMARY KEY(id),
-            UNIQUE KEY unique_user_module (user_id, module_name),
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci');
+            enabled BOOLEAN NOT NULL DEFAULT FALSE,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT NULL,
+            UNIQUE(user_id, module_name),
+            CONSTRAINT fk_user_module_subscriptions_user_id FOREIGN KEY (user_id) REFERENCES "user"(id) ON DELETE CASCADE
+        )');
     }
 
     public function down(Schema $schema): void

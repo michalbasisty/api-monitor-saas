@@ -54,16 +54,17 @@ class Kernel extends BaseKernel
         // Load main API routes
         $routes->import('../config/routes.yaml');
         
-        // Load module routes dynamically after boot
-        if ($this->container->has(ModuleRegistry::class)) {
-            $moduleRegistry = $this->container->get(ModuleRegistry::class);
-            
-            foreach ($moduleRegistry->getAllModules() as $module) {
-                $routesPath = $module->getRoutesPath();
-                if (file_exists($routesPath)) {
-                    $routes->import($routesPath);
-                }
-            }
+        // Load module routes directly (modules are registered in boot())
+        // Load Base Module routes
+        $baseRoutes = __DIR__ . '/Modules/Base/resources/config/routes.yaml';
+        if (file_exists($baseRoutes)) {
+            $routes->import($baseRoutes);
+        }
+        
+        // Load Ecommerce Module routes
+        $ecommerceRoutes = __DIR__ . '/Modules/Ecommerce/resources/config/routes.yaml';
+        if (file_exists($ecommerceRoutes)) {
+            $routes->import($ecommerceRoutes);
         }
     }
 }
