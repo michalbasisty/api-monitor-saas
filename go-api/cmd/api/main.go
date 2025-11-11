@@ -6,51 +6,18 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
 
-	"api-monitor-go/internal/config"
-	"api-monitor-go/internal/database"
+	"api-monitor-go/internal/container"
 	"api-monitor-go/internal/logger"
 	"api-monitor-go/internal/middleware"
-	"api-monitor-go/internal/monitoring"
-	"api-monitor-go/internal/websocket"
+	"github.com/gorilla/websocket"
 	"github.com/joho/godotenv"
-	"github.com/redis/go-redis/v9"
-	gorillaWs "github.com/gorilla/websocket"
 )
 
-var upgrader = gorillaWs.Upgrader{
-	CheckOrigin: func(r *http.Request) bool {
-		origin := r.Header.Get("Origin")
-		allowedOrigins := []string{
-			"http://localhost",
-			"http://localhost:80",
-			"http://localhost:4200",
-			"http://localhost:3000",
-			"http://angular:80",
-		}
-
-		// Add FRONTEND_URL from config if set
-		if cfg := config.Load(); cfg.FrontendURL != "" && cfg.FrontendURL != "http://localhost" {
-			allowedOrigins = append(allowedOrigins, cfg.FrontendURL)
-		}
-
-		for _, allowed := range allowedOrigins {
-			if origin == allowed {
-				return true
-			}
-		}
-		return false
-	},
-}
-
-var (
-	isHealthy int32 = 1
-	mu        sync.RWMutex
-)
+var isHealthy int32 = 1
 
 func main() {
 	// Load environment variables
@@ -58,75 +25,36 @@ func main() {
 		// Not critical, continue with env variables
 	}
 
-	// Initialize logger
-	log := logger.New()
-	log.SetLevel(logger.LevelInfo)
-
-	// Load configuration
-	cfg := config.Load()
-
-	// Validate required configuration
-	if cfg.DatabaseURL == "" {
-		log.Fatal("DATABASE_URL environment variable is required")
-	}
-
-	// Initialize database
-	db, err := database.NewDB()
+	// Initialize container with all dependencies
+	cnt, err := container.NewContainer()
 	if err != nil {
-		log.Fatalf("failed to initialize database: %v", err)
+		// Cannot use logger before container init
+		fmt.Fprintf(os.Stderr, "failed to initialize container: %v\n", err)
+		os.Exit(1)
 	}
-	defer db.Close()
+	defer cnt.Close()
 
-	// Initialize Redis client
-	rdb := redis.NewClient(&redis.Options{
-		Addr: cfg.RedisHost + ":" + cfg.RedisPort,
-		DB:   cfg.RedisDB,
-	})
-	defer rdb.Close()
+	log := cnt.Logger()
 
-	// Test Redis connection
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	if err := rdb.Ping(ctx).Err(); err != nil {
-		cancel()
-		log.Fatalf("failed to connect to Redis: %v", err)
-	}
-	cancel()
-
-	log.Info("database and Redis connections established")
-
-	// Initialize repository
-	repo := database.NewRepository(db.Postgres)
-
-	// Initialize WebSocket hub
-	hub := websocket.NewHub()
-	go hub.Run()
-
-	// Initialize monitoring service with config
-	monitorService := monitoring.NewService(repo, hub, rdb, cfg.SymfonyAPIURL, cfg.HTTPClientTimeout)
-
-	// Initialize rate limiter (10 requests per second per IP)
-	rateLimiter := middleware.NewRateLimiter(10, 10, 5*time.Minute)
-	defer rateLimiter.Close()
-
-	// Setup HTTP handlers with middleware
+	// Setup HTTP handlers
 	mux := http.NewServeMux()
 
 	// Health check endpoint (no rate limiting)
 	mux.HandleFunc("/health", handleHealth())
 
 	// WebSocket endpoint (with rate limiting)
-	mux.HandleFunc("/ws", middleware.RateLimitMiddleware(rateLimiter, 10, 10)(
-		http.HandlerFunc(handleWebSocket(hub)),
+	mux.HandleFunc("/ws", middleware.RateLimitMiddleware(cnt.RateLimiter(), 10, 10)(
+		http.HandlerFunc(handleWebSocket(cnt)),
 	).ServeHTTP)
 
 	// Monitoring endpoint (with rate limiting)
-	mux.HandleFunc("/monitor", middleware.RateLimitMiddleware(rateLimiter, 10, 10)(
-		http.HandlerFunc(handleMonitor(monitorService)),
+	mux.HandleFunc("/monitor", middleware.RateLimitMiddleware(cnt.RateLimiter(), 10, 10)(
+		http.HandlerFunc(handleMonitor(cnt)),
 	).ServeHTTP)
 
 	// Create HTTP server with timeouts
 	server := &http.Server{
-		Addr:         ":" + cfg.Port,
+		Addr:         ":" + cnt.Config().Port,
 		Handler:      mux,
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 15 * time.Second,
@@ -135,14 +63,14 @@ func main() {
 
 	// Start server in goroutine
 	go func() {
-		log.Infof("Go API server starting on port %s", cfg.Port)
+		log.Infof("Go API server starting on port %s", cnt.Config().Port)
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Errorf("server error: %v", err)
 			atomic.StoreInt32(&isHealthy, 0)
 		}
 	}()
 
-	// Graceful shutdown
+	// Wait for shutdown signal
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 	<-sigChan
@@ -150,7 +78,8 @@ func main() {
 	log.Info("shutting down server...")
 	atomic.StoreInt32(&isHealthy, 0)
 
-	ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
+	// Graceful shutdown with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	if err := server.Shutdown(ctx); err != nil {
@@ -161,9 +90,14 @@ func main() {
 }
 
 // handleWebSocket handles WebSocket upgrade and registration
-func handleWebSocket(hub *websocket.Hub) http.HandlerFunc {
-	log := logger.New()
+func handleWebSocket(cnt *container.Container) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		log := cnt.Logger().WithField("endpoint", "/ws")
+
+		upgrader := websocket.Upgrader{
+			CheckOrigin: checkOrigin(cnt),
+		}
+
 		conn, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
 			log.Errorf("WebSocket upgrade failed: %v", err)
@@ -175,20 +109,23 @@ func handleWebSocket(hub *websocket.Hub) http.HandlerFunc {
 		conn.SetReadDeadline(time.Now().Add(60 * time.Second))
 		conn.SetWriteDeadline(time.Now().Add(60 * time.Second))
 
-		hub.Register(conn)
+		cnt.WebSocketHub().Register(conn)
 		log.Info("WebSocket client connected")
 	}
 }
 
 // handleMonitor handles the monitoring trigger endpoint
-func handleMonitor(monitorService *monitoring.Service) http.HandlerFunc {
-	log := logger.New()
+func handleMonitor(cnt *container.Container) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		log := cnt.Logger().WithField("endpoint", "/monitor")
+
+		// Run monitoring asynchronously
 		go func() {
-			if err := monitorService.MonitorEndpoints(); err != nil {
+			if err := cnt.MonitoringService().MonitorEndpoints(); err != nil {
 				log.Errorf("monitoring failed: %v", err)
 			}
 		}()
+
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusAccepted)
 		fmt.Fprintf(w, `{"status":"monitoring started"}`)
@@ -198,11 +135,9 @@ func handleMonitor(monitorService *monitoring.Service) http.HandlerFunc {
 // handleHealth handles the health check endpoint
 func handleHealth() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		mu.RLock()
-		healthy := atomic.LoadInt32(&isHealthy) == 1
-		mu.RUnlock()
-
 		w.Header().Set("Content-Type", "application/json")
+
+		healthy := atomic.LoadInt32(&isHealthy) == 1
 
 		if !healthy {
 			w.WriteHeader(http.StatusServiceUnavailable)
@@ -212,5 +147,31 @@ func handleHealth() http.HandlerFunc {
 
 		w.WriteHeader(http.StatusOK)
 		fmt.Fprintf(w, `{"status":"healthy"}`)
+	}
+}
+
+// checkOrigin returns a function that validates CORS origins
+func checkOrigin(cnt *container.Container) func(*http.Request) bool {
+	return func(r *http.Request) bool {
+		origin := r.Header.Get("Origin")
+		allowedOrigins := []string{
+			"http://localhost",
+			"http://localhost:80",
+			"http://localhost:4200",
+			"http://localhost:3000",
+			"http://angular:80",
+		}
+
+		// Add FRONTEND_URL from config if set
+		if cnt.Config().FrontendURL != "" && cnt.Config().FrontendURL != "http://localhost" {
+			allowedOrigins = append(allowedOrigins, cnt.Config().FrontendURL)
+		}
+
+		for _, allowed := range allowedOrigins {
+			if origin == allowed {
+				return true
+			}
+		}
+		return false
 	}
 }

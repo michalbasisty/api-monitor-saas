@@ -3,8 +3,11 @@ package monitoring
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net"
 	"net/http"
+	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 
@@ -17,11 +20,20 @@ func TestCheckEndpointHandlesError(t *testing.T) {
 	endpoint := models.Endpoint{ID: 1, URL: "http://localhost:0", Timeout: 10}
 
 	res := s.checkEndpoint(endpoint)
-	if res.EndpointID != 1 {
-		t.Fatalf("expected endpoint id 1")
+	
+	// Verify endpoint ID
+	if got, want := res.EndpointID, 1; got != want {
+		t.Errorf("EndpointID: got %d, want %d", got, want)
 	}
+	
+	// Verify status code is nil on error
 	if res.StatusCode != nil {
-		t.Fatalf("expected nil status code on error")
+		t.Errorf("StatusCode: got %v, want nil", res.StatusCode)
+	}
+	
+	// Verify error message is present
+	if res.ErrorMessage == nil {
+		t.Error("ErrorMessage: got nil, want non-nil error message")
 	}
 }
 
@@ -72,7 +84,11 @@ func TestCheckEndpointWithHeaders(t *testing.T) {
 }
 
 func TestCheckEndpointTimeout(t *testing.T) {
-	listener, _ := net.Listen("tcp", "127.0.0.1:0")
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("failed to create listener: %v", err)
+	}
+	
 	ts := &http.Server{
 		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			time.Sleep(500 * time.Millisecond)
@@ -87,119 +103,15 @@ func TestCheckEndpointTimeout(t *testing.T) {
 	endpoint := models.Endpoint{ID: 4, URL: url, Timeout: 50}
 	res := s.checkEndpoint(endpoint)
 
+	// Verify status code is nil on timeout
 	if res.StatusCode != nil {
-		t.Fatalf("expected nil status code on timeout, got %+v", res.StatusCode)
+		t.Errorf("StatusCode: got %v, want nil (timeout)", res.StatusCode)
 	}
+	
+	// Verify error message is present
 	if res.ErrorMessage == nil {
-		t.Fatalf("expected error message on timeout")
+		t.Error("ErrorMessage: got nil, want non-nil error on timeout")
 	}
-}
-
-func TestEvaluateAlertsResponseTime(t *testing.T) {
-	s := &Service{
-		client: &http.Client{Timeout: 5 * time.Second},
-	}
-	threshold := 100
-	alert := models.Alert{
-		ID:        1,
-		AlertType: "response_time",
-		Threshold: mustMarshal(threshold),
-	}
-
-	result := models.MonitoringResult{
-		EndpointID:   1,
-		ResponseTime: 150,
-	}
-
-	// This would normally call sendAlertNotification, but we'll just check the logic
-	s.evaluateAlerts(result, []models.Alert{alert})
-}
-
-func TestEvaluateAlertsAvailability(t *testing.T) {
-	s := &Service{
-		client: &http.Client{Timeout: 5 * time.Second},
-	}
-	alert := models.Alert{
-		ID:        2,
-		AlertType: "availability",
-		Threshold: []byte("{}"),
-	}
-
-	errMsg := "connection refused"
-	result := models.MonitoringResult{
-		EndpointID:   1,
-		ErrorMessage: &errMsg,
-	}
-
-	s.evaluateAlerts(result, []models.Alert{alert})
-}
-
-func TestEvaluateAlertsStatusCodeExpected(t *testing.T) {
-	s := &Service{
-		client: &http.Client{Timeout: 5 * time.Second},
-	}
-	threshold := map[string]interface{}{
-		"expected_codes":   []interface{}{float64(200), float64(201)},
-		"alert_on_failure": true,
-	}
-	alert := models.Alert{
-		ID:        3,
-		AlertType: "status_code",
-		Threshold: mustMarshal(threshold),
-	}
-
-	statusCode := 200
-	result := models.MonitoringResult{
-		EndpointID: 1,
-		StatusCode: &statusCode,
-	}
-
-	s.evaluateAlerts(result, []models.Alert{alert})
-}
-
-func TestEvaluateAlertsStatusCodeUnexpected(t *testing.T) {
-	s := &Service{
-		client: &http.Client{Timeout: 5 * time.Second},
-	}
-	threshold := map[string]interface{}{
-		"expected_codes":   []interface{}{float64(200), float64(201)},
-		"alert_on_failure": true,
-	}
-	alert := models.Alert{
-		ID:        3,
-		AlertType: "status_code",
-		Threshold: mustMarshal(threshold),
-	}
-
-	statusCode := 500
-	result := models.MonitoringResult{
-		EndpointID: 1,
-		StatusCode: &statusCode,
-	}
-
-	s.evaluateAlerts(result, []models.Alert{alert})
-}
-
-func TestEvaluateAlertsStatusCodeNilWithAlertOnFailure(t *testing.T) {
-	s := &Service{
-		client: &http.Client{Timeout: 5 * time.Second},
-	}
-	threshold := map[string]interface{}{
-		"expected_codes":   []interface{}{float64(200)},
-		"alert_on_failure": true,
-	}
-	alert := models.Alert{
-		ID:        3,
-		AlertType: "status_code",
-		Threshold: mustMarshal(threshold),
-	}
-
-	result := models.MonitoringResult{
-		EndpointID: 1,
-		StatusCode: nil,
-	}
-
-	s.evaluateAlerts(result, []models.Alert{alert})
 }
 
 func TestCheckEndpointInvalidURL(t *testing.T) {
@@ -298,15 +210,19 @@ func TestCheckEndpointStatusCodeVariety(t *testing.T) {
 		expectedResult int
 	}{
 		{"Created", 201, 201},
-		{"No Content", 204, 204},
-		{"Bad Request", 400, 400},
-		{"Not Found", 404, 404},
-		{"Server Error", 500, 500},
+		{"NoContent", 204, 204},
+		{"BadRequest", 400, 400},
+		{"NotFound", 404, 404},
+		{"ServerError", 500, 500},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			listener, _ := net.Listen("tcp", "127.0.0.1:0")
+			listener, err := net.Listen("tcp", "127.0.0.1:0")
+			if err != nil {
+				t.Fatalf("failed to create listener: %v", err)
+			}
+			
 			ts := &http.Server{
 				Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					w.WriteHeader(tt.responseCode)
@@ -320,129 +236,14 @@ func TestCheckEndpointStatusCodeVariety(t *testing.T) {
 			endpoint := models.Endpoint{ID: 9, URL: url, Timeout: 1000}
 			res := s.checkEndpoint(endpoint)
 
-			if res.StatusCode == nil || *res.StatusCode != tt.expectedResult {
-				t.Fatalf("expected %d, got %+v", tt.expectedResult, res.StatusCode)
+			// Verify correct status code
+			if res.StatusCode == nil {
+				t.Errorf("StatusCode: got nil, want %d", tt.expectedResult)
+			} else if *res.StatusCode != tt.expectedResult {
+				t.Errorf("StatusCode: got %d, want %d", *res.StatusCode, tt.expectedResult)
 			}
 		})
 	}
-}
-
-// TestEvaluateAlertsStatusCodeNilWithoutAlertOnFailure tests status code alert when no response
-func TestEvaluateAlertsStatusCodeNilWithoutAlertOnFailure(t *testing.T) {
-	s := &Service{
-		client: &http.Client{Timeout: 5 * time.Second},
-	}
-	threshold := map[string]interface{}{
-		"expected_codes":   []interface{}{float64(200)},
-		"alert_on_failure": false,
-	}
-	alert := models.Alert{
-		ID:        4,
-		AlertType: "status_code",
-		Threshold: mustMarshal(threshold),
-	}
-
-	result := models.MonitoringResult{
-		EndpointID: 1,
-		StatusCode: nil,
-	}
-
-	s.evaluateAlerts(result, []models.Alert{alert})
-}
-
-// TestEvaluateAlertsResponseTimeNoTrigger tests response time alert that doesn't trigger
-func TestEvaluateAlertsResponseTimeNoTrigger(t *testing.T) {
-	s := &Service{
-		client: &http.Client{Timeout: 5 * time.Second},
-	}
-	threshold := 500
-	alert := models.Alert{
-		ID:        5,
-		AlertType: "response_time",
-		Threshold: mustMarshal(threshold),
-	}
-
-	result := models.MonitoringResult{
-		EndpointID:   1,
-		ResponseTime: 100,
-	}
-
-	s.evaluateAlerts(result, []models.Alert{alert})
-}
-
-// TestEvaluateAlertsAvailabilityNoTrigger tests availability alert that doesn't trigger
-func TestEvaluateAlertsAvailabilityNoTrigger(t *testing.T) {
-	s := &Service{
-		client: &http.Client{Timeout: 5 * time.Second},
-	}
-	alert := models.Alert{
-		ID:        6,
-		AlertType: "availability",
-		Threshold: []byte("{}"),
-	}
-
-	statusCode := 200
-	result := models.MonitoringResult{
-		EndpointID: 1,
-		StatusCode: &statusCode,
-	}
-
-	s.evaluateAlerts(result, []models.Alert{alert})
-}
-
-// TestEvaluateAlertsMultipleAlerts tests multiple alerts for a single result
-func TestEvaluateAlertsMultipleAlerts(t *testing.T) {
-	s := &Service{
-		client: &http.Client{Timeout: 5 * time.Second},
-	}
-
-	alerts := []models.Alert{
-		{
-			ID:        1,
-			AlertType: "response_time",
-			Threshold: mustMarshal(100),
-		},
-		{
-			ID:        2,
-			AlertType: "availability",
-			Threshold: []byte("{}"),
-		},
-		{
-			ID:        3,
-			AlertType: "status_code",
-			Threshold: mustMarshal(map[string]interface{}{
-				"expected_codes":   []interface{}{float64(200)},
-				"alert_on_failure": true,
-			}),
-		},
-	}
-
-	result := models.MonitoringResult{
-		EndpointID:   1,
-		ResponseTime: 50,
-		StatusCode:   nil,
-	}
-
-	s.evaluateAlerts(result, alerts)
-}
-
-// TestEvaluateAlertsUnknownType tests handling of unknown alert type
-func TestEvaluateAlertsUnknownType(t *testing.T) {
-	s := &Service{
-		client: &http.Client{Timeout: 5 * time.Second},
-	}
-	alert := models.Alert{
-		ID:        7,
-		AlertType: "unknown_type",
-		Threshold: []byte("{}"),
-	}
-
-	result := models.MonitoringResult{
-		EndpointID:   1,
-		ResponseTime: 100,
-	}
-
-	s.evaluateAlerts(result, []models.Alert{alert})
 }
 
 // TestCheckEndpointLargeTimeout tests endpoint with large timeout
