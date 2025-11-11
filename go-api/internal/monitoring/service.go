@@ -11,6 +11,10 @@ import (
 "strconv"
 	"sync"
 "time"
+)
+
+// Service coordinates endpoint checks, result persistence, alert evaluation,
+// WebSocket broadcasting, and publishing to the Redis stream.
 
 "api-monitor-go/internal/database"
 "api-monitor-go/internal/models"
@@ -37,6 +41,7 @@ ctx:    context.Background(),
 }
 
 func (s *Service) MonitorEndpoints() error {
+	// Run checks concurrently and publish results to both storage and consumers.
 	endpoints, err := s.repo.GetActiveEndpoints()
 	if err != nil {
 		return fmt.Errorf("failed to get endpoints: %w", err)
@@ -46,6 +51,7 @@ func (s *Service) MonitorEndpoints() error {
 	results := make(chan models.MonitoringResult, len(endpoints))
 
 	for _, endpoint := range endpoints {
+		// Track one goroutine per endpoint to check.
 		wg.Add(1)
 		go func(e models.Endpoint) {
 			defer wg.Done()
@@ -66,7 +72,8 @@ func (s *Service) MonitorEndpoints() error {
 	if err := s.repo.SaveResult(result); err != nil {
 	log.Printf("Error saving result for endpoint %d: %v", result.EndpointID, err)
 	} else {
-	log.Printf("Checked endpoint %d: %dms, status: %v", result.EndpointID, result.ResponseTime, result.StatusCode)
+	// Operator-facing summary; prefer debug level for verbose traces.
+		log.Printf("Checked endpoint %d: %dms, status: %v", result.EndpointID, result.ResponseTime, result.StatusCode)
 
 	// Broadcast to WebSocket clients
 	s.hub.Broadcast(result)

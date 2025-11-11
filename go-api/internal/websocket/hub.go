@@ -8,6 +8,8 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+// Hub manages WebSocket clients and broadcasts monitoring results to subscribers.
+
 type Hub struct {
 	clients    map[*websocket.Conn]bool
 	broadcast  chan models.MonitoringResult
@@ -49,6 +51,7 @@ func (h *Hub) Run() {
 	}
 }
 
+// Broadcast queues a monitoring result to be sent to all connected clients.
 func (h *Hub) Broadcast(result models.MonitoringResult) {
 	select {
 	case h.broadcast <- result:
@@ -68,10 +71,12 @@ func (h *Hub) broadcastToClients(result models.MonitoringResult) {
 	}
 }
 
+// Register enqueues a client connection to be tracked by the hub.
 func (h *Hub) Register(client *websocket.Conn) {
 	h.register <- client
 }
 
+// Unregister enqueues a client connection to be removed from the hub.
 func (h *Hub) Unregister(client *websocket.Conn) {
 	h.unregister <- client
 }

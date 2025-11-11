@@ -89,6 +89,7 @@ func main() {
 		port = "8080"
 	}
 
+	// Start HTTP server; handlers should be idempotent and fast.
 	log.Printf("Go API server starting on port %s", port)
 	log.Fatal(http.ListenAndServe(":"+port, nil))
 }

@@ -7,6 +7,11 @@ use Psr\Log\LoggerInterface;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 
+/**
+ * Publishes HTTP request/response metrics to a Redis stream.
+ * Prefers phpredis if available, otherwise falls back to Predis.
+ * Errors are logged and do not affect request handling.
+ */
 class MetricsPublisher
 {
     private const STREAM_KEY = 'api-metrics';
@@ -16,6 +21,14 @@ class MetricsPublisher
     {
     }
 
+    /**
+     * Publish a single HTTP metric to the Redis stream.
+     *
+     * @param Request $request  Current HTTP request.
+     * @param Response $response Current HTTP response.
+     * @param float $startTime  Request start time (microtime(true)).
+     * @return void
+     */
     public function publishMetric(Request $request, Response $response, float $startTime): void
     {
         $endTime = microtime(true);
@@ -52,6 +65,10 @@ class MetricsPublisher
         }
     }
 
+    /**
+     * Build a normalized endpoint identifier (e.g., GET:/api/users/{id}).
+     * Dynamic numeric segments are replaced with {id} to improve aggregation.
+     */
     private function generateEndpointId(Request $request): string
     {
         // Create a unique identifier for the endpoint based on method and path
