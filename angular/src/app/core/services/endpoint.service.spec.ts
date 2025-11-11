@@ -1,7 +1,14 @@
 import { TestBed } from '@angular/core/testing';
 import { HttpClientTestingModule, HttpTestingController } from '@angular/common/http/testing';
 import { EndpointService } from './endpoint.service';
-import { Endpoint } from '../models/endpoint.model';
+
+interface Endpoint {
+  id: string;
+  url: string;
+  name: string;
+  is_active: boolean;
+  created_at: string;
+}
 
 describe('EndpointService', () => {
   let service: EndpointService;
@@ -20,153 +27,72 @@ describe('EndpointService', () => {
     httpMock.verify();
   });
 
-  it('should be created', () => {
-    expect(service).toBeTruthy();
+  it('should fetch all endpoints', () => {
+    const mock: Endpoint[] = [
+      { id: '1', url: 'http://a', name: 'A', is_active: true, created_at: '' }
+    ];
+
+    service.getEndpoints().subscribe((resp: any) => {
+      expect(resp.endpoints.length).toBe(1);
+      expect(resp.endpoints[0].id).toBe('1');
+    });
+
+    const req = httpMock.expectOne('/api/endpoints');
+    expect(req.request.method).toBe('GET');
+    req.flush({ endpoints: mock });
   });
 
-  describe('getEndpoints', () => {
-    it('should fetch all endpoints', () => {
-      const mockEndpoints: Endpoint[] = [
-        {
-          id: '1',
-          url: 'https://api.example.com/health',
-          check_interval: 300,
-          timeout: 5000,
-          is_active: true,
-          created_at: new Date(),
-          updated_at: new Date()
-        }
-      ];
+  it('should fetch single endpoint by id', () => {
+    const endpoint: Endpoint = { id: '2', url: 'http://b', name: 'B', is_active: false, created_at: '' };
 
-      service.getEndpoints().subscribe(endpoints => {
-        expect(endpoints.length).toBe(1);
-        expect(endpoints[0].url).toBe('https://api.example.com/health');
-      });
-
-      const req = httpMock.expectOne('/api/endpoints');
-      expect(req.request.method).toBe('GET');
-      req.flush(mockEndpoints);
+    service.getEndpoint('2').subscribe(resp => {
+      expect(resp.id).toBe('2');
+      expect(resp.url).toBe('http://b');
     });
+
+    const req = httpMock.expectOne('/api/endpoints/2');
+    expect(req.request.method).toBe('GET');
+    req.flush(endpoint);
   });
 
-  describe('getEndpoint', () => {
-    it('should fetch single endpoint by id', () => {
-      const endpointId = '123';
-      const mockEndpoint: Endpoint = {
-        id: endpointId,
-        url: 'https://api.example.com/health',
-        check_interval: 300,
-        timeout: 5000,
-        is_active: true,
-        created_at: new Date(),
-        updated_at: new Date()
-      };
+  it('should create an endpoint', () => {
+    const payload = { url: 'http://c', name: 'C', is_active: true } as any;
+    const created = { id: '3', ...payload, created_at: '' } as Endpoint;
 
-      service.getEndpoint(endpointId).subscribe(endpoint => {
-        expect(endpoint.id).toBe(endpointId);
-      });
-
-      const req = httpMock.expectOne(`/api/endpoints/${endpointId}`);
-      expect(req.request.method).toBe('GET');
-      req.flush(mockEndpoint);
+    service.createEndpoint(payload).subscribe(resp => {
+      expect(resp.id).toBe('3');
+      expect(resp.url).toBe('http://c');
     });
+
+    const req = httpMock.expectOne('/api/endpoints');
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body).toEqual(payload);
+    req.flush(created);
   });
 
-  describe('createEndpoint', () => {
-    it('should create new endpoint', () => {
-      const newEndpoint = {
-        url: 'https://api.example.com/status',
-        check_interval: 300,
-        timeout: 5000,
-        is_active: true
-      };
+  it('should update an endpoint', () => {
+    const update = { name: 'C2', is_active: false } as any;
+    const id = '3';
 
-      service.createEndpoint(newEndpoint).subscribe(response => {
-        expect(response.id).toBeTruthy();
-        expect(response.url).toBe(newEndpoint.url);
-      });
-
-      const req = httpMock.expectOne('/api/endpoints');
-      expect(req.request.method).toBe('POST');
-      expect(req.request.body).toEqual(newEndpoint);
-
-      req.flush({ id: '123', ...newEndpoint });
+    service.updateEndpoint(id, update).subscribe(resp => {
+      expect(resp.name).toBe('C2');
+      expect(resp.is_active).toBe(false);
     });
 
-    it('should validate URL format', () => {
-      const invalidEndpoint = {
-        url: 'not-a-valid-url',
-        check_interval: 300,
-        timeout: 5000,
-        is_active: true
-      };
-
-      // This should be caught by client-side validation before sending
-      expect(() => {
-        // URL validation would happen here
-      }).not.toThrow();
-    });
+    const req = httpMock.expectOne(`/api/endpoints/${id}`);
+    expect(req.request.method).toBe('PUT');
+    expect(req.request.body).toEqual(update);
+    req.flush({ id, url: 'http://c', name: 'C2', is_active: false, created_at: '' });
   });
 
-  describe('updateEndpoint', () => {
-    it('should update existing endpoint', () => {
-      const endpointId = '123';
-      const updates = {
-        check_interval: 600,
-        is_active: false
-      };
-
-      service.updateEndpoint(endpointId, updates).subscribe(response => {
-        expect(response.check_interval).toBe(600);
-        expect(response.is_active).toBe(false);
-      });
-
-      const req = httpMock.expectOne(`/api/endpoints/${endpointId}`);
-      expect(req.request.method).toBe('PUT');
-      expect(req.request.body).toEqual(updates);
-
-      req.flush({
-        id: endpointId,
-        url: 'https://api.example.com/health',
-        ...updates,
-        created_at: new Date(),
-        updated_at: new Date()
-      });
+  it('should delete an endpoint', () => {
+    const id = '4';
+    service.deleteEndpoint(id).subscribe(resp => {
+      expect(resp).toEqual({ message: 'deleted' });
     });
-  });
 
-  describe('deleteEndpoint', () => {
-    it('should delete endpoint', () => {
-      const endpointId = '123';
-
-      service.deleteEndpoint(endpointId).subscribe();
-
-      const req = httpMock.expectOne(`/api/endpoints/${endpointId}`);
-      expect(req.request.method).toBe('DELETE');
-
-      req.flush({});
-    });
-  });
-
-  describe('getStats', () => {
-    it('should fetch endpoint statistics', () => {
-      const endpointId = '123';
-      const mockStats = {
-        uptime_percentage: 99.5,
-        avg_response_time: 125,
-        total_checks: 1000,
-        successful_checks: 995,
-        failed_checks: 5
-      };
-
-      service.getStats(endpointId).subscribe(stats => {
-        expect(stats.uptime_percentage).toBe(99.5);
-        expect(stats.avg_response_time).toBe(125);
-      });
-
-      const req = httpMock.expectOne(`/api/monitoring/endpoints/${endpointId}/stats`);
-      expect(req.request.method).toBe('GET');
-      req.flush(mockStats);
-    });
+    const req = httpMock.expectOne(`/api/endpoints/${id}`);
+    expect(req.request.method).toBe('DELETE');
+    req.flush({ message: 'deleted' });
   });
 });

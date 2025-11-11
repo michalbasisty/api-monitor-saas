@@ -69,35 +69,82 @@ class NotificationService
 
     private function sendSlackNotification(User $user, Alert $alert, string $message): void
     {
-        // Assuming user has a slack_webhook_url field, or use a default
-        // For simplicity, use a placeholder
-        $webhookUrl = getenv('SLACK_WEBHOOK_URL');
+        $webhookUrl = $user->getSlackWebhookUrl();
         if (!$webhookUrl) {
-            return;
+            // If user hasn't configured Slack, try global config
+            $webhookUrl = (string) getenv('SLACK_WEBHOOK_URL');
+            if (!$webhookUrl) {
+                // User has not configured Slack - skip silently for now, consider logging
+                return;
+            }
         }
 
         $endpoint = $this->entityManager->getRepository(\App\Entity\Endpoint::class)->find($alert->getEndpointId());
         $endpointUrl = $endpoint ? $endpoint->getUrl() : 'Unknown';
 
         $payload = [
-            'text' => sprintf("Alert: %s\nEndpoint: %s\n%s", $alert->getAlertType(), $endpointUrl, $message)
+            'text' => sprintf("Alert: %s\nEndpoint: %s\n%s", $alert->getAlertType(), $endpointUrl, $message),
+            'blocks' => [
+                [
+                    'type' => 'header',
+                    'text' => [
+                        'type' => 'plain_text',
+                        'text' => 'API Monitor Alert'
+                    ]
+                ],
+                [
+                    'type' => 'section',
+                    'fields' => [
+                        [
+                            'type' => 'mrkdwn',
+                            'text' => sprintf("*Alert Type:*\n%s", $alert->getAlertType())
+                        ],
+                        [
+                            'type' => 'mrkdwn',
+                            'text' => sprintf("*Endpoint:*\n%s", $endpointUrl)
+                        ]
+                    ]
+                ],
+                [
+                    'type' => 'section',
+                    'text' => [
+                        'type' => 'mrkdwn',
+                        'text' => $message
+                    ]
+                ]
+            ]
         ];
 
         try {
-            $this->httpClient->request('POST', $webhookUrl, [
-                'json' => $payload
+            $response = $this->httpClient->request('POST', $webhookUrl, [
+                'json' => $payload,
+                'timeout' => 5
             ]);
+            
+            if ($response->getStatusCode() < 200 || $response->getStatusCode() >= 300) {
+                // Log warning but don't throw
+                \error_log(sprintf("Slack notification returned status %d for alert %s", $response->getStatusCode(), $alert->getId()));
+            }
         } catch (\Exception $e) {
-            // Log error
+            \error_log(sprintf("Failed to send Slack notification: %s", $e->getMessage()));
         }
     }
 
     private function sendWebhookNotification(User $user, Alert $alert, string $message): void
     {
-        // Assuming user has a webhook_url field
-        // For simplicity, placeholder
-        $webhookUrl = getenv('WEBHOOK_URL');
+        $webhookUrl = $user->getWebhookUrl();
         if (!$webhookUrl) {
+            // If user hasn't configured webhook, try global config
+            $webhookUrl = (string) getenv('WEBHOOK_URL');
+            if (!$webhookUrl) {
+                // User has not configured webhook - skip
+                return;
+            }
+        }
+
+        // Validate webhook URL format
+        if (!filter_var($webhookUrl, FILTER_VALIDATE_URL)) {
+            \error_log(sprintf("Invalid webhook URL for user %s: %s", $user->getId(), $webhookUrl));
             return;
         }
 
@@ -109,15 +156,35 @@ class NotificationService
             'endpoint_id' => $alert->getEndpointId(),
             'endpoint_url' => $endpoint ? $endpoint->getUrl() : null,
             'message' => $message,
-            'triggered_at' => (new \DateTimeImmutable())->format('c')
+            'triggered_at' => (new \DateTimeImmutable())->format('c'),
+            'user_id' => $user->getId()
         ];
 
         try {
-            $this->httpClient->request('POST', $webhookUrl, [
-                'json' => $payload
+            $response = $this->httpClient->request('POST', $webhookUrl, [
+                'json' => $payload,
+                'timeout' => 5,
+                'headers' => [
+                    'User-Agent' => 'API-Monitor-Webhook/1.0',
+                    'X-Webhook-Signature' => $this->generateWebhookSignature($payload, $user->getId())
+                ]
             ]);
+            
+            if ($response->getStatusCode() < 200 || $response->getStatusCode() >= 300) {
+                \error_log(sprintf("Webhook notification returned status %d for alert %s", $response->getStatusCode(), $alert->getId()));
+            }
         } catch (\Exception $e) {
-            // Log error
+            \error_log(sprintf("Failed to send webhook notification: %s", $e->getMessage()));
         }
+    }
+
+    private function generateWebhookSignature(array $payload, string $userId): string
+    {
+        $secret = (string) getenv('WEBHOOK_SECRET');
+        if (!$secret) {
+            return '';
+        }
+        $data = json_encode($payload) . $userId . $secret;
+        return hash('sha256', $data);
     }
 }

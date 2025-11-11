@@ -35,6 +35,14 @@ func NewDB() (*DB, error) {
 		return nil, fmt.Errorf("failed to ping postgres: %w", err)
 	}
 
+	// Configure connection pool
+	// SetMaxOpenConns sets the maximum number of open connections to the database
+	pg.SetMaxOpenConns(25)
+	// SetMaxIdleConns sets the maximum number of connections in the idle connection pool
+	pg.SetMaxIdleConns(5)
+	// SetConnMaxLifetime sets the maximum amount of time a connection may be reused
+	pg.SetConnMaxLifetime(5 * time.Duration(60) * time.Second) // 5 minutes
+
 	// Redis connection
 	rHost := getEnv("REDIS_HOST", "redis")
 	rPort := getEnv("REDIS_PORT", "6379")

@@ -22,7 +22,6 @@ function Dashboard() {
     const websocket = new WebSocket(wsUrl)
 
     websocket.onopen = () => {
-      console.log('WebSocket connected')
       dispatch(setConnected(true))
       setWs(websocket)
     }
@@ -33,7 +32,6 @@ function Dashboard() {
     }
 
     websocket.onclose = () => {
-      console.log('WebSocket disconnected')
       dispatch(setConnected(false))
       setWs(null)
     }

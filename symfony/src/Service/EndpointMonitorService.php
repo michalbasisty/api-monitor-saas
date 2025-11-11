@@ -26,65 +26,100 @@ class EndpointMonitorService
         $result->setEndpointId($endpoint->getId());
         $result->setCheckedAt(new \DateTimeImmutable());
 
-        $startTime = microtime(true);
-
         try {
-            $options = [
-                'timeout' => $endpoint->getTimeout() / 1000,
-                'max_redirects' => 5,
-            ];
-
-            if ($endpoint->getHeaders()) {
-                $options['headers'] = $endpoint->getHeaders();
-            }
-
-            $response = $this->httpClient->request('GET', $endpoint->getUrl(), $options);
-
-            $statusCode = $response->getStatusCode();
-            $endTime = microtime(true);
-            $responseTime = (int) (($endTime - $startTime) * 1000);
-
-            $result->setStatusCode($statusCode);
-            $result->setResponseTime($responseTime);
-
-            $this->logger->info('Endpoint check successful', [
-                'endpoint_id' => $endpoint->getId(),
-                'url' => $endpoint->getUrl(),
-                'status_code' => $statusCode,
-                'response_time' => $responseTime
-            ]);
-
+            $result = $this->performHttpCheck($endpoint, $result);
+            $this->logSuccess($endpoint, $result);
         } catch (ExceptionInterface $e) {
-            $endTime = microtime(true);
-            $responseTime = (int) (($endTime - $startTime) * 1000);
-
-            $result->setResponseTime($responseTime);
-            $result->setErrorMessage($this->getErrorMessage($e));
-
-            $this->logger->error('Endpoint check failed', [
-                'endpoint_id' => $endpoint->getId(),
-                'url' => $endpoint->getUrl(),
-                'error' => $e->getMessage()
-            ]);
-
+            $result = $this->handleHttpException($e, $endpoint, $result);
         } catch (\Throwable $e) {
-            $result->setErrorMessage($e->getMessage());
-
-            $this->logger->error('Unexpected error during endpoint check', [
-                'endpoint_id' => $endpoint->getId(),
-                'url' => $endpoint->getUrl(),
-                'error' => $e->getMessage()
-            ]);
+            $result = $this->handleUnexpectedException($e, $endpoint, $result);
         }
 
+        $this->persistResult($result);
+        $this->evaluateAlerts($endpoint, $result);
+
+        return $result;
+    }
+
+    private function performHttpCheck(Endpoint $endpoint, MonitoringResult $result): MonitoringResult
+    {
+        $startTime = microtime(true);
+        $options = $this->buildHttpOptions($endpoint);
+
+        $response = $this->httpClient->request('GET', $endpoint->getUrl(), $options);
+
+        $statusCode = $response->getStatusCode();
+        $responseTime = $this->calculateResponseTime($startTime);
+
+        $result->setStatusCode($statusCode);
+        $result->setResponseTime($responseTime);
+
+        return $result;
+    }
+
+    private function buildHttpOptions(Endpoint $endpoint): array
+    {
+        $options = [
+            'timeout' => $endpoint->getTimeout() / 1000,
+            'max_redirects' => 5,
+        ];
+
+        if ($endpoint->getHeaders()) {
+            $options['headers'] = $endpoint->getHeaders();
+        }
+
+        return $options;
+    }
+
+    private function calculateResponseTime(float $startTime): int
+    {
+        $endTime = microtime(true);
+        return (int) (($endTime - $startTime) * 1000);
+    }
+
+    private function handleHttpException(ExceptionInterface $e, Endpoint $endpoint, MonitoringResult $result): MonitoringResult
+    {
+        $result->setErrorMessage($this->getErrorMessage($e));
+        $this->logger->error('Endpoint check failed', [
+            'endpoint_id' => $endpoint->getId(),
+            'url' => $endpoint->getUrl(),
+            'error' => $e->getMessage()
+        ]);
+        return $result;
+    }
+
+    private function handleUnexpectedException(\Throwable $e, Endpoint $endpoint, MonitoringResult $result): MonitoringResult
+    {
+        $result->setErrorMessage($e->getMessage());
+        $this->logger->error('Unexpected error during endpoint check', [
+            'endpoint_id' => $endpoint->getId(),
+            'url' => $endpoint->getUrl(),
+            'error' => $e->getMessage()
+        ]);
+        return $result;
+    }
+
+    private function logSuccess(Endpoint $endpoint, MonitoringResult $result): void
+    {
+        $this->logger->info('Endpoint check successful', [
+            'endpoint_id' => $endpoint->getId(),
+            'url' => $endpoint->getUrl(),
+            'status_code' => $result->getStatusCode(),
+            'response_time' => $result->getResponseTime()
+        ]);
+    }
+
+    private function persistResult(MonitoringResult $result): void
+    {
         $this->entityManager->persist($result);
         $this->entityManager->flush();
+    }
 
+    private function evaluateAlerts(Endpoint $endpoint, MonitoringResult $result): void
+    {
         if ($this->alertEvaluationService) {
             $this->alertEvaluationService->evaluateAlertsForEndpoint($endpoint, $result);
         }
-
-        return $result;
     }
 
     public function checkAllActiveEndpoints(): array

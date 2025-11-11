@@ -1,7 +1,7 @@
-import { Injectable, signal } from '@angular/core';
+import { Injectable, signal, OnDestroy } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Router } from '@angular/router';
-import { Observable, tap } from 'rxjs';
+import { Observable, tap, Subject, takeUntil } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import {
   User,
@@ -14,9 +14,10 @@ import {
 @Injectable({
   providedIn: 'root'
 })
-export class AuthService {
+export class AuthService implements OnDestroy {
   private readonly API_URL = environment.apiUrl;
   private readonly TOKEN_KEY = 'auth_token';
+  private destroy$ = new Subject<void>();
   
   currentUser = signal<User | null>(null);
   isAuthenticated = signal<boolean>(false);
@@ -26,6 +27,11 @@ export class AuthService {
     private router: Router
   ) {
     this.checkAuth();
+  }
+
+  ngOnDestroy(): void {
+    this.destroy$.next();
+    this.destroy$.complete();
   }
 
   login(credentials: LoginRequest): Observable<LoginResponse> {
@@ -62,6 +68,9 @@ export class AuthService {
     const token = this.getToken();
     if (token) {
       this.http.get<User>(`${this.API_URL}/auth/me`)
+        .pipe(
+          takeUntil(this.destroy$)
+        )
         .subscribe({
           next: (user) => {
             this.currentUser.set(user);

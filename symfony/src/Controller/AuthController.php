@@ -80,8 +80,7 @@ class AuthController extends AbstractController
 
             return $this->json([
                 'message' => 'User registered successfully. Please check your email for verification.',
-                'user_id' => $user->getId(),
-                'verification_token' => $user->getVerificationToken() // Remove in production
+                'user_id' => $user->getId()
             ], Response::HTTP_CREATED);
 
         } catch (ApiException $e) {
