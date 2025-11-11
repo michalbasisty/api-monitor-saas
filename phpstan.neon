@@ -1,0 +1,18 @@
+parameters:
+    level: 8
+    paths:
+        - src
+    ignoreErrors:
+        # Ignore known issues that will be fixed gradually
+        - '#Property .*::\$\w+ is never written, only read#'
+        - '#Parameter \$\w+ of method .* has default value, but is missing the type#'
+        - '#Empty statement#'
+    excludePaths:
+        - bin
+        - var
+        - vendor
+        - tests
+
+rules:
+    - phpstan\Rules\Regexp\RegexRule
+    - phpstan\Rules\Regexp\IncompatibleRegexPatternRule

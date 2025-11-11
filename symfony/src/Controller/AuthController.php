@@ -170,34 +170,46 @@ class AuthController extends AbstractController
      * )
      */
     #[Route('/login', name: 'app_auth_login', methods: ['POST'])]
-    public function login(Request $request): JsonResponse
+    public function login(Request $request): Response
     {
-        try {
-            $data = json_decode($request->getContent(), true);
+    try {
+    $data = json_decode($request->getContent(), true);
 
-            if (!$data) {
-                throw new ApiException('Invalid JSON data', Response::HTTP_BAD_REQUEST);
-            }
+    if (!$data) {
+    return new JsonResponse(['error' => 'Invalid JSON data'], Response::HTTP_BAD_REQUEST);
+    }
 
-            $loginRequest = LoginRequest::fromArray($data);
+    $loginRequest = LoginRequest::fromArray($data);
 
-            // Validate the request
-            $errors = $this->validator->validate($loginRequest);
-            if (count($errors) > 0) {
-                throw new ApiException('Invalid login credentials', Response::HTTP_BAD_REQUEST);
-            }
+    // Validate the request
+    $errors = $this->validator->validate($loginRequest);
+    if (count($errors) > 0) {
+    return new JsonResponse(['error' => 'Invalid login credentials'], Response::HTTP_BAD_REQUEST);
+    }
 
-            $user = $this->authService->login($loginRequest->username, $loginRequest->password);
+    $user = $this->authService->login($loginRequest->username, $loginRequest->password);
+    $token = $this->jwtManager->create($user);
 
-            $token = $this->jwtManager->create($user);
+    return $this->json([
+    'token' => $token,
+    'user' => [
+    'id' => $user->getId(),
+    'email' => $user->getEmail(),
+    'roles' => $user->getRoles(),
+    'subscription_tier' => $user->getSubscriptionTier(),
+    'is_verified' => $user->isVerified(),
+    'company_id' => $user->getCompanyId(),
+    'created_at' => $user->getCreatedAt()->format('c'),
+    'last_login_at' => $user->getLastLoginAt()?->format('c'),
+    ]
+    ]);
 
-            return $this->json(AuthResponse::create($token, $user));
-
-        } catch (ApiException $e) {
-            throw $e;
-        } catch (\Exception $e) {
-            throw new ApiException('Login failed', Response::HTTP_INTERNAL_SERVER_ERROR);
-        }
+    } catch (ApiException $e) {
+             throw $e;
+    } catch (\Exception $e) {
+    error_log('Login error: ' . $e->getMessage() . ' | ' . $e->getFile() . ':' . $e->getLine());
+        throw new ApiException('Login failed: ' . $e->getMessage(), Response::HTTP_INTERNAL_SERVER_ERROR);
+    }
     }
 
     /**

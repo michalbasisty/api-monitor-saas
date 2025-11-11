@@ -38,7 +38,8 @@ RUN composer install \
 COPY . .
 
 # Set up directories and permissions
-RUN mkdir -p \
+RUN rm -rf var/cache var/log && \
+    mkdir -p \
     var/cache \
     var/log \
     config/jwt && \
@@ -54,7 +55,10 @@ RUN if [ ! -f config/jwt/private.pem ]; then \
         chown www-data:www-data config/jwt/*.pem; \
     fi
 
-EXPOSE 8000
+# Update PHP-FPM to listen on all interfaces
+RUN sed -i 's/listen = 127.0.0.1:9000/listen = 0.0.0.0:9000/' /usr/local/etc/php-fpm.d/www.conf
 
-# Use PHP's built-in server for development
-CMD ["php", "-S", "0.0.0.0:8000", "-t", "public"]
+EXPOSE 9000
+
+# Use PHP-FPM 
+CMD ["php-fpm"]

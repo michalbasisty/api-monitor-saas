@@ -6,13 +6,14 @@ services:
     _defaults:
         autowire: true      # Automatically injects dependencies in your services.
         autoconfigure: true # Automatically registers your services as commands, event subscribers, etc.
+        bind:
+            Predis\Client $redisClient: '@redis_client'
+            Predis\Client $redis: '@redis_client'
 
     App\Service\StripeService:
-    arguments:
-    $stripeSecretKey: 'sk_test_placeholder_for_development'
+        arguments:
+            $stripeSecretKey: '[REDACTED:stripe-secret-token]'
         public: true
-        bind:
-            Predis\Client $redis: '@redis_client'
 
     # Register a simple native password hasher and alias the Symfony interface
     App\Security\SimpleUserPasswordHasher: ~

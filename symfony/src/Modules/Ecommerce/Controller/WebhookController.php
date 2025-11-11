@@ -24,6 +24,7 @@ class WebhookController extends AbstractController
     {
         $payload = $request->getContent();
         $signature = $request->headers->get('Stripe-Signature');
+        $eventType = 'unknown';
 
         if (!$signature) {
             $this->logger->error('Stripe webhook received without signature');
@@ -33,6 +34,7 @@ class WebhookController extends AbstractController
         try {
             // Verify and parse webhook
             $event = $this->stripeService->processWebhook($payload, $signature);
+            $eventType = $event->type;
 
             // Handle different event types
             match ($event->type) {
@@ -54,7 +56,7 @@ class WebhookController extends AbstractController
         } catch (\Exception $e) {
             $this->logger->error('Webhook processing failed', [
                 'error' => $e->getMessage(),
-                'event_type' => $event->type ?? 'unknown',
+                'event_type' => $eventType,
             ]);
 
             // Always return 200 to prevent Stripe from retrying

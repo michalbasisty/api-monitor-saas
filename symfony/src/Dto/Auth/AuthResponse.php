@@ -2,6 +2,8 @@
 
 namespace App\Dto\Auth;
 
+use Symfony\Component\Serializer\Attribute\SerializedName;
+
 class AuthResponse
 {
     public string $token;

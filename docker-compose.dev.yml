@@ -26,7 +26,7 @@ services:
   symfony:
     build: ./symfony
     ports:
-      - "8000:8000"
+      - "9000:9000"
     environment:
       - APP_ENV=${APP_ENV:-dev}
       - APP_DEBUG=${APP_DEBUG:-1}
@@ -34,6 +34,7 @@ services:
       - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       - REDIS_HOST=${REDIS_HOST}
       - REDIS_PORT=${REDIS_PORT}
+      - MAILER_DSN=smtp://mailhog:1025
     volumes:
       - ./.env:/var/www/html/.env
       - ./symfony/src:/var/www/html/src
@@ -47,6 +48,8 @@ services:
       postgres:
         condition: service_healthy
       redis:
+        condition: service_started
+      mailhog:
         condition: service_started
     networks:
       - webnet
@@ -104,6 +107,15 @@ services:
       interval: 5s
       timeout: 3s
       retries: 5
+    networks:
+      - webnet
+
+  mailhog:
+    image: mailhog/mailhog:latest
+    restart: always
+    ports:
+      - "1025:1025"
+      - "8025:8025"
     networks:
       - webnet
 

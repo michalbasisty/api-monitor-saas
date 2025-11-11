@@ -49,8 +49,12 @@ class AuthService
 
         $this->entityManager->flush();
 
-        // Send verification email
-        $this->emailVerificationService->sendVerificationEmail($user);
+        // Send verification email (non-blocking)
+        try {
+            $this->emailVerificationService->sendVerificationEmail($user);
+        } catch (\Exception $e) {
+            error_log('Failed to send verification email: ' . $e->getMessage());
+        }
 
         return $user;
     }
@@ -114,8 +118,12 @@ class AuthService
 
         $this->entityManager->flush();
 
-        // Send password reset email
-        $this->emailVerificationService->sendPasswordResetEmail($user);
+        // Send password reset email (non-blocking)
+        try {
+            $this->emailVerificationService->sendPasswordResetEmail($user);
+        } catch (\Exception $e) {
+            error_log('Failed to send password reset email: ' . $e->getMessage());
+        }
     }
 
     public function resetPassword(string $token, string $password): User
@@ -224,20 +232,28 @@ class AuthService
 
         // Check if token is still valid
         if ($user->getVerificationToken() && $this->emailVerificationService->isTokenValid($user)) {
-            // Resend existing token
+        // Resend existing token
+        try {
             $this->emailVerificationService->sendVerificationEmail($user);
+            } catch (\Exception $e) {
+                 error_log('Failed to resend verification email: ' . $e->getMessage());
+            }
             return;
         }
 
-        // Generate new token
+         // Generate new token
         $token = bin2hex(random_bytes(32));
-        $user->setVerificationToken($token);
+         $user->setVerificationToken($token);
         $user->setVerificationTokenExpiresAt(new \DateTimeImmutable('+24 hours'));
 
-        $this->entityManager->flush();
+         $this->entityManager->flush();
 
-        $this->emailVerificationService->sendVerificationEmail($user);
-    }
+         try {
+             $this->emailVerificationService->sendVerificationEmail($user);
+         } catch (\Exception $e) {
+             error_log('Failed to send verification email: ' . $e->getMessage());
+         }
+     }
 
     public function getUserProfile(User $user): array
     {

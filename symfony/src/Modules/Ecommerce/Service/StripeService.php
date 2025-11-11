@@ -146,8 +146,6 @@ class StripeService
 
         // Check if payment success rate dropped
         $this->checkPaymentSuccessRate($paymentGateway);
-
-        return true;
     }
 
     /**
