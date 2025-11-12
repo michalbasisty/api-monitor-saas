@@ -19,16 +19,14 @@ class StripeService
 
     public function verifyWebhookSignature(string $payload, string $signature): ?array
     {
-        try {
-            // TODO: Implement actual Stripe signature verification
-            // For now, just parse the payload
-            $event = json_decode($payload, true);
-            
-            if (!$event || !isset($event['type'])) {
-                return null;
-            }
+        if (empty($this->webhookSecret)) {
+            $this->logger->error('Stripe webhook secret not configured');
+            return null;
+        }
 
-            return $event;
+        try {
+            $event = \Stripe\Webhook::constructEvent($payload, $signature, $this->webhookSecret);
+            return $event->toArray();
         } catch (\Exception $e) {
             $this->logger->error('Failed to verify webhook signature', ['error' => $e->getMessage()]);
             return null;
@@ -56,21 +54,53 @@ class StripeService
 
     private function handleChargeSucceeded(array $event): void
     {
-        // TODO: Update payment metrics for successful charge
+        $charge = $event['data']['object'] ?? [];
+        $amount = $charge['amount'] ?? 0;
+        $currency = $charge['currency'] ?? 'usd';
+
+        // Update payment metrics for successful charge
+        $this->logger->info('Charge succeeded', [
+            'charge_id' => $charge['id'] ?? 'unknown',
+            'amount' => $amount / 100, // Convert cents to dollars
+            'currency' => $currency
+        ]);
+        // TODO: Persist to database for metrics
     }
 
     private function handleChargeFailed(array $event): void
     {
-        // TODO: Update payment metrics for failed charge
+        $charge = $event['data']['object'] ?? [];
+
+        // Update payment metrics for failed charge
+        $this->logger->info('Charge failed', [
+            'charge_id' => $charge['id'] ?? 'unknown',
+            'failure_code' => $charge['failure_code'] ?? 'unknown'
+        ]);
+        // TODO: Persist to database for metrics
     }
 
     private function handlePaymentIntentSucceeded(array $event): void
     {
-        // TODO: Update payment intent succeeded metrics
+        $paymentIntent = $event['data']['object'] ?? [];
+        $amount = $paymentIntent['amount'] ?? 0;
+
+        // Update payment intent succeeded metrics
+        $this->logger->info('Payment intent succeeded', [
+            'payment_intent_id' => $paymentIntent['id'] ?? 'unknown',
+            'amount' => $amount / 100
+        ]);
+        // TODO: Persist to database for metrics
     }
 
     private function handlePaymentIntentFailed(array $event): void
     {
-        // TODO: Update payment intent failed metrics
+        $paymentIntent = $event['data']['object'] ?? [];
+
+        // Update payment intent failed metrics
+        $this->logger->info('Payment intent failed', [
+            'payment_intent_id' => $paymentIntent['id'] ?? 'unknown',
+            'last_payment_error' => $paymentIntent['last_payment_error'] ?? []
+        ]);
+        // TODO: Persist to database for metrics
     }
 }

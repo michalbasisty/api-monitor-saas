@@ -1,14 +1,11 @@
-controllers:
-resource:
-path: ../src/Controller/
-namespace: App\Controller
-type: attribute
+app:
+  resource: ../src/Controller/
+  type: attribute
 
-# API Documentation
 api_doc:
-    path: /api/doc
-    controller: nelmio_api_doc.controller.swagger_ui
+  path: /api/doc
+  controller: nelmio_api_doc.controller.swagger_ui
 
 api_doc_json:
-    path: /api/doc.json
-    controller: nelmio_api_doc.controller.swagger_json
+  path: /api/doc.json
+  controller: nelmio_api_doc.controller.swagger_json

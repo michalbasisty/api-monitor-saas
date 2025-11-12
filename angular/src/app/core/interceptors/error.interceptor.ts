@@ -17,6 +17,7 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
 
   return next(req).pipe(
     catchError((error: HttpErrorResponse) => {
+      console.error('Error interceptor caught error:', error.status, error);
       const apiError = parseError(error);
       handleError(apiError, authService, router);
       return throwError(() => apiError);

@@ -236,8 +236,9 @@ class PaymentControllerTest extends WebTestCase
 
     private function getJwtToken(User $user): string
     {
-        // TODO: Implement JWT token generation for testing
-        // This would need to use the same JWT service as the application
-        return 'dummy_token';
+        $container = self::getContainer();
+        $jwtManager = $container->get('lexik_jwt_authentication.jwt_manager');
+
+        return $jwtManager->create($user);
     }
 }

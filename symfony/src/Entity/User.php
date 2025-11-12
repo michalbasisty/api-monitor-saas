@@ -16,7 +16,7 @@ use Symfony\Bridge\Doctrine\Validator\Constraints\UniqueEntity;
 class User implements UserInterface, PasswordAuthenticatedUserInterface
 {
     #[ORM\Id]
-    #[ORM\Column(type: 'string', length: 36, unique: true)]
+    #[ORM\Column(type: 'uuid', unique: true)]
     private ?string $id = null;
 
     #[ORM\Column(type: 'string', length: 180, unique: true)]

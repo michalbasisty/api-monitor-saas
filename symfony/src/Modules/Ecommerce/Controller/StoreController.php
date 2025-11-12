@@ -221,14 +221,17 @@ class StoreController extends AbstractController
                 throw new StoreNotFoundException($id);
             }
 
-            // TODO: Calculate actual health metrics from real data
+            // Calculate actual health metrics from real data
+            $healthData = $this->storeService->calculateStoreHealth($store);
+
             return $this->json([
                 'data' => [
-                    'status' => 'healthy',
-                    'uptime_percentage' => 99.9,
-                    'revenue_per_minute' => 125.50,
-                    'error_rate' => 0.1,
+                    'status' => $healthData['status'],
+                    'uptime_percentage' => $healthData['uptime_percentage'],
+                    'revenue_per_minute' => $healthData['revenue_per_minute'],
+                    'error_rate' => $healthData['error_rate'],
                     'last_check' => (new \DateTime())->format('c'),
+                    'metrics' => $healthData['metrics'],
                 ]
             ]);
         } catch (StoreNotFoundException $e) {

@@ -156,11 +156,11 @@ class CheckoutController extends AbstractController
                     'steps' => array_map(fn(CheckoutStep $s) => [
                         'id' => (string) $s->getId(),
                         'name' => $s->getStepName(),
-                        'avg_load_time_ms' => 0, // TODO: Calculate
-                        'error_rate_percentage' => 0, // TODO: Calculate
-                        'completion_rate_percentage' => 0, // TODO: Calculate
+                        'avg_load_time_ms' => $this->calculateAverageLoadTime($s),
+                        'error_rate_percentage' => $this->calculateErrorRate($s),
+                        'completion_rate_percentage' => $this->calculateCompletionRate($s),
                     ], $steps),
-                    'overall_completion_rate' => 0, // TODO: Calculate
+                    'overall_completion_rate' => $this->calculateOverallCompletionRate($steps),
                 ]
             ]);
         } catch (StoreNotFoundException $e) {
@@ -217,5 +217,64 @@ class CheckoutController extends AbstractController
             'http_status_code' => $metric->getHttpStatusCode(),
             'timestamp' => $metric->getTimestamp()?->format('c'),
         ];
+    }
+
+    /**
+     * Calculate average load time for a checkout step
+     */
+    private function calculateAverageLoadTime(CheckoutStep $step): float
+    {
+        $metrics = $this->checkoutService->getMetricsForStep($step, new \DateTime('-24 hours'));
+        if (empty($metrics)) {
+            return 0.0;
+        }
+
+        $totalTime = array_sum(array_map(fn($m) => $m->getLoadTimeMs(), $metrics));
+        return round($totalTime / count($metrics), 2);
+    }
+
+    /**
+     * Calculate error rate for a checkout step
+     */
+    private function calculateErrorRate(CheckoutStep $step): float
+    {
+        $metrics = $this->checkoutService->getMetricsForStep($step, new \DateTime('-24 hours'));
+        if (empty($metrics)) {
+            return 0.0;
+        }
+
+        $errorCount = count(array_filter($metrics, fn($m) => $m->isErrorOccurred()));
+        return round(($errorCount / count($metrics)) * 100, 2);
+    }
+
+    /**
+     * Calculate completion rate for a checkout step
+     */
+    private function calculateCompletionRate(CheckoutStep $step): float
+    {
+        $metrics = $this->checkoutService->getMetricsForStep($step, new \DateTime('-24 hours'));
+        if (empty($metrics)) {
+            return 0.0;
+        }
+
+        $successCount = count(array_filter($metrics, fn($m) => !$m->isErrorOccurred()));
+        return round(($successCount / count($metrics)) * 100, 2);
+    }
+
+    /**
+     * Calculate overall completion rate across all steps
+     */
+    private function calculateOverallCompletionRate(array $steps): float
+    {
+        if (empty($steps)) {
+            return 0.0;
+        }
+
+        $totalRate = 0;
+        foreach ($steps as $step) {
+            $totalRate += $this->calculateCompletionRate($step);
+        }
+
+        return round($totalRate / count($steps), 2);
     }
 }

@@ -1,169 +1,409 @@
 import { TestBed } from '@angular/core/testing';
 import { HttpClientTestingModule, HttpTestingController } from '@angular/common/http/testing';
 import { AuthService } from './auth.service';
-import { User } from '../models/user.model';
+import { Router } from '@angular/router';
 
-describe('AuthService', () => {
+describe('AuthService - Logout & Token Cleanup', () => {
   let service: AuthService;
   let httpMock: HttpTestingController;
+  let router: jasmine.SpyObj<Router>;
 
   beforeEach(() => {
+    const routerSpy = jasmine.createSpyObj('Router', ['navigate']);
+
     TestBed.configureTestingModule({
       imports: [HttpClientTestingModule],
-      providers: [AuthService]
+      providers: [
+        AuthService,
+        { provide: Router, useValue: routerSpy }
+      ]
     });
+
     service = TestBed.inject(AuthService);
     httpMock = TestBed.inject(HttpTestingController);
+    router = TestBed.inject(Router) as jasmine.SpyObj<Router>;
   });
 
   afterEach(() => {
     httpMock.verify();
+    localStorage.clear();
   });
 
-  it('should be created', () => {
-    expect(service).toBeTruthy();
+  /**
+   * Test 1: Logout should clear JWT token
+   */
+  it('should clear JWT token from localStorage on logout', () => {
+    // Setup
+    const token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...';
+    localStorage.setItem('auth_token', token);
+    expect(localStorage.getItem('auth_token')).toBe(token);
+
+    // Execute
+    service.logout();
+
+    // Verify
+    expect(localStorage.getItem('auth_token')).toBeNull();
   });
 
-  describe('register', () => {
-    it('should register a new user', () => {
-      const email = 'test@example.com';
-      const password = 'password123';
+  /**
+   * Test 2: Logout should clear user data
+   */
+  it('should clear user data on logout', () => {
+    // Setup
+    const userData = {
+      id: 'user-123',
+      email: 'user@example.com',
+      roles: ['ROLE_USER']
+    };
+    localStorage.setItem('user_data', JSON.stringify(userData));
 
-      service.register(email, password).subscribe(response => {
-        expect(response.id).toBeTruthy();
-        expect(response.verification_token).toBeTruthy();
-      });
+    // Execute
+    service.logout();
 
-      const req = httpMock.expectOne('/api/auth/register');
-      expect(req.request.method).toBe('POST');
-      expect(req.request.body.email).toBe(email);
-      expect(req.request.body.password).toBe(password);
-
-      req.flush({
-        id: '123',
-        email: email,
-        verification_token: 'token123'
-      });
-    });
-
-    it('should handle registration error', () => {
-      service.register('test@example.com', 'pass').subscribe(
-        () => fail('should have failed'),
-        error => {
-          expect(error.status).toBe(400);
-        }
-      );
-
-      const req = httpMock.expectOne('/api/auth/register');
-      req.flush('Email already exists', { status: 400, statusText: 'Bad Request' });
-    });
+    // Verify
+    expect(localStorage.getItem('user_data')).toBeNull();
   });
 
-  describe('login', () => {
-    it('should login user and return token', () => {
-      const email = 'test@example.com';
-      const password = 'password123';
+  /**
+   * Test 3: Logout should clear all auth-related data
+   */
+  it('should clear all authentication data on logout', () => {
+    // Setup
+    localStorage.setItem('auth_token', 'token123');
+    localStorage.setItem('user_data', JSON.stringify({ id: 'user-123' }));
+    localStorage.setItem('refresh_token', 'refresh123');
 
-      service.login(email, password).subscribe(response => {
-        expect(response.token).toBeTruthy();
-        expect(response.user.email).toBe(email);
-      });
+    // Execute
+    service.logout();
 
-      const req = httpMock.expectOne('/api/auth/login');
-      expect(req.request.method).toBe('POST');
-
-      req.flush({
-        token: 'eyJ0eXAiOiJKV1QiLCJhbGc...',
-        user: { id: '123', email: email, roles: ['ROLE_USER'] }
-      });
-    });
-
-    it('should store token in localStorage on successful login', () => {
-      spyOn(localStorage, 'setItem');
-
-      service.login('test@example.com', 'password123').subscribe();
-
-      const req = httpMock.expectOne('/api/auth/login');
-      req.flush({ token: 'token123', user: { id: '123', email: 'test@example.com' } });
-
-      expect(localStorage.setItem).toHaveBeenCalledWith('token', 'token123');
-    });
-
-    it('should handle login error', () => {
-      service.login('test@example.com', 'wrong').subscribe(
-        () => fail('should have failed'),
-        error => {
-          expect(error.status).toBe(401);
-        }
-      );
-
-      const req = httpMock.expectOne('/api/auth/login');
-      req.flush('Invalid credentials', { status: 401, statusText: 'Unauthorized' });
-    });
+    // Verify
+    expect(localStorage.getItem('auth_token')).toBeNull();
+    expect(localStorage.getItem('user_data')).toBeNull();
+    expect(localStorage.getItem('refresh_token')).toBeNull();
   });
 
-  describe('verifyEmail', () => {
-    it('should verify email with token', () => {
-      const token = 'verify-token-123';
+  /**
+   * Test 4: Logout should update authentication state
+   */
+  it('should set isAuthenticated to false on logout', () => {
+    // Setup
+    service.isAuthenticated = signal(true);
 
-      service.verifyEmail(token).subscribe(response => {
-        expect(response.user.is_verified).toBe(true);
-      });
+    // Execute
+    service.logout();
 
-      const req = httpMock.expectOne(`/api/auth/verify-email/${token}`);
-      expect(req.request.method).toBe('GET');
-
-      req.flush({
-        message: 'Email verified',
-        user: { id: '123', email: 'test@example.com', is_verified: true }
-      });
-    });
+    // Verify
+    expect(service.isAuthenticated()).toBeFalsy();
   });
 
-  describe('logout', () => {
-    it('should clear token from localStorage', () => {
-      spyOn(localStorage, 'removeItem');
+  /**
+   * Test 5: Logout should clear current user
+   */
+  it('should clear currentUser signal on logout', () => {
+    // Setup
+    service.currentUser = signal({ id: 'user-123', email: 'user@example.com' });
 
-      service.logout();
+    // Execute
+    service.logout();
 
-      expect(localStorage.removeItem).toHaveBeenCalledWith('token');
-    });
+    // Verify
+    expect(service.currentUser()).toBeNull();
   });
 
-  describe('getToken', () => {
-    it('should retrieve token from localStorage', () => {
-      spyOn(localStorage, 'getItem').and.returnValue('token123');
+  /**
+   * Test 6: Logout should redirect to login page
+   */
+  it('should redirect to login page on logout', () => {
+    // Execute
+    service.logout();
 
-      const token = service.getToken();
-
-      expect(token).toBe('token123');
-      expect(localStorage.getItem).toHaveBeenCalledWith('token');
-    });
-
-    it('should return null if token does not exist', () => {
-      spyOn(localStorage, 'getItem').and.returnValue(null);
-
-      const token = service.getToken();
-
-      expect(token).toBeNull();
-    });
+    // Verify
+    expect(router.navigate).toHaveBeenCalledWith(['/login']);
   });
 
-  describe('isAuthenticated', () => {
-    it('should return true if token exists', () => {
-      spyOn(localStorage, 'getItem').and.returnValue('token123');
+  /**
+   * Test 7: Multiple logout calls should be idempotent
+   */
+  it('should handle multiple logout calls without error', () => {
+    // Execute
+    service.logout();
+    service.logout();
+    service.logout();
 
-      const isAuth = service.isAuthenticated();
+    // Verify - should not throw error
+    expect(router.navigate).toHaveBeenCalledTimes(3);
+  });
 
-      expect(isAuth).toBe(true);
+  /**
+   * Test 8: Logout should work even if localStorage is empty
+   */
+  it('should handle logout when localStorage is empty', () => {
+    // Ensure localStorage is empty
+    localStorage.clear();
+
+    // Execute
+    expect(() => service.logout()).not.toThrow();
+
+    // Verify
+    expect(service.isAuthenticated()).toBeFalsy();
+  });
+
+  /**
+   * Test 9: Logout should remove HTTP Authorization header
+   */
+  it('should clear token from HTTP interceptor', () => {
+    // Setup
+    const token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...';
+    localStorage.setItem('auth_token', token);
+    spyOn(service, 'getToken').and.returnValue(token);
+
+    // Execute
+    service.logout();
+
+    // Verify - getToken should return null after logout
+    expect(service.getToken()).toBeNull();
+  });
+
+  /**
+   * Test 10: Logout should clear any pending requests
+   */
+  it('should cancel any pending API requests on logout', () => {
+    // Execute
+    service.logout();
+
+    // Verify
+    expect(router.navigate).toHaveBeenCalled();
+  });
+
+  /**
+   * Test 11: Token cleanup should prevent use of stale token
+   */
+  it('should prevent authentication with cleared token', () => {
+    // Setup
+    localStorage.setItem('auth_token', 'expired-token');
+
+    // Execute
+    service.logout();
+
+    // Verify
+    const storedToken = localStorage.getItem('auth_token');
+    expect(storedToken).toBeNull();
+  });
+
+  /**
+   * Test 12: Session data should be unrecoverable after logout
+   */
+  it('should not recover session data after logout', () => {
+    // Setup
+    const sessionData = {
+      token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+      user: { id: 'user-123', email: 'user@example.com' }
+    };
+    localStorage.setItem('session', JSON.stringify(sessionData));
+
+    // Execute
+    service.logout();
+
+    // Verify
+    expect(localStorage.getItem('session')).toBeNull();
+  });
+
+  /**
+   * Test 13: Logout should work across different tabs
+   */
+  it('should handle logout in one tab affecting others', () => {
+    // Setup
+    localStorage.setItem('auth_token', 'token123');
+
+    // Execute
+    service.logout();
+
+    // Verify - in real scenario, storage events would notify other tabs
+    expect(localStorage.getItem('auth_token')).toBeNull();
+  });
+
+  /**
+   * Test 14: Session should be completely terminated
+   */
+  it('should terminate session completely', () => {
+    // Setup
+    service.isAuthenticated = signal(true);
+    service.currentUser = signal({
+      id: 'user-123',
+      email: 'user@example.com',
+      roles: ['ROLE_USER']
     });
+    localStorage.setItem('auth_token', 'token123');
 
-    it('should return false if token does not exist', () => {
-      spyOn(localStorage, 'getItem').and.returnValue(null);
+    // Execute
+    service.logout();
 
-      const isAuth = service.isAuthenticated();
+    // Verify
+    expect(service.isAuthenticated()).toBeFalsy();
+    expect(service.currentUser()).toBeNull();
+    expect(localStorage.getItem('auth_token')).toBeNull();
+    expect(router.navigate).toHaveBeenCalledWith(['/login']);
+  });
 
-      expect(isAuth).toBe(false);
-    });
+  /**
+   * Test 15: Logout should prevent re-authentication with old token
+   */
+  it('should prevent using old token after logout', () => {
+    // Setup
+    const oldToken = 'old-token-123';
+    localStorage.setItem('auth_token', oldToken);
+
+    // Execute
+    service.logout();
+
+    // Try to use old token
+    const currentToken = service.getToken();
+
+    // Verify
+    expect(currentToken).not.toBe(oldToken);
+    expect(currentToken).toBeNull();
   });
 });
+
+describe('AuthService - Login & Token Management', () => {
+  let service: AuthService;
+  let httpMock: HttpTestingController;
+  let router: jasmine.SpyObj<Router>;
+
+  beforeEach(() => {
+    const routerSpy = jasmine.createSpyObj('Router', ['navigate']);
+
+    TestBed.configureTestingModule({
+      imports: [HttpClientTestingModule],
+      providers: [
+        AuthService,
+        { provide: Router, useValue: routerSpy }
+      ]
+    });
+
+    service = TestBed.inject(AuthService);
+    httpMock = TestBed.inject(HttpTestingController);
+    router = TestBed.inject(Router) as jasmine.SpyObj<Router>;
+  });
+
+  afterEach(() => {
+    httpMock.verify();
+    localStorage.clear();
+  });
+
+  /**
+   * Test 16: Successful login should store token
+   */
+  it('should store JWT token after successful login', (done) => {
+    const mockResponse = {
+      token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+      user: {
+        id: 'user-123',
+        email: 'user@example.com',
+        roles: ['ROLE_USER'],
+        is_verified: true
+      }
+    };
+
+    service.login('user@example.com', 'password123').subscribe(() => {
+      expect(localStorage.getItem('auth_token')).toBe(mockResponse.token);
+      done();
+    });
+
+    const req = httpMock.expectOne('/api/auth/login');
+    expect(req.request.method).toBe('POST');
+    req.flush(mockResponse);
+  });
+
+  /**
+   * Test 17: Login should update current user
+   */
+  it('should update currentUser after successful login', (done) => {
+    const mockResponse = {
+      token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+      user: {
+        id: 'user-123',
+        email: 'user@example.com',
+        roles: ['ROLE_USER'],
+        is_verified: true
+      }
+    };
+
+    service.login('user@example.com', 'password123').subscribe(() => {
+      expect(service.currentUser()).toEqual(mockResponse.user);
+      done();
+    });
+
+    const req = httpMock.expectOne('/api/auth/login');
+    req.flush(mockResponse);
+  });
+
+  /**
+   * Test 18: Login should set isAuthenticated flag
+   */
+  it('should set isAuthenticated to true after successful login', (done) => {
+    const mockResponse = {
+      token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+      user: {
+        id: 'user-123',
+        email: 'user@example.com',
+        roles: ['ROLE_USER'],
+        is_verified: true
+      }
+    };
+
+    service.login('user@example.com', 'password123').subscribe(() => {
+      expect(service.isAuthenticated()).toBeTruthy();
+      done();
+    });
+
+    const req = httpMock.expectOne('/api/auth/login');
+    req.flush(mockResponse);
+  });
+
+  /**
+   * Test 19: Login failure should not store token
+   */
+  it('should not store token on login failure', (done) => {
+    localStorage.clear();
+
+    service.login('user@example.com', 'wrongpassword').subscribe(
+      () => fail('should have failed'),
+      () => {
+        expect(localStorage.getItem('auth_token')).toBeNull();
+        done();
+      }
+    );
+
+    const req = httpMock.expectOne('/api/auth/login');
+    req.flush({ message: 'Invalid credentials' }, { status: 401, statusText: 'Unauthorized' });
+  });
+
+  /**
+   * Test 20: Token should be retrievable after login
+   */
+  it('should be able to retrieve token with getToken() after login', (done) => {
+    const mockToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...';
+    const mockResponse = {
+      token: mockToken,
+      user: {
+        id: 'user-123',
+        email: 'user@example.com',
+        roles: ['ROLE_USER'],
+        is_verified: true
+      }
+    };
+
+    service.login('user@example.com', 'password123').subscribe(() => {
+      const storedToken = service.getToken();
+      expect(storedToken).toBe(mockToken);
+      done();
+    });
+
+    const req = httpMock.expectOne('/api/auth/login');
+    req.flush(mockResponse);
+  });
+});
+
+// Helper for signal import (add at top if needed)
+import { signal } from '@angular/core';

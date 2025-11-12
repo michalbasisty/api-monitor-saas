@@ -26,6 +26,7 @@ services:
         exclude:
             - '../src/DependencyInjection/'
             - '../src/Entity/'
+            - '../src/Script/'
             - '../src/Kernel.php'
 
     redis_client:

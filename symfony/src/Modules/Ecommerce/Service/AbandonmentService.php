@@ -48,8 +48,24 @@ class AbandonmentService
             ->getQuery()
             ->getSingleScalarResult();
 
-        // TODO: Calculate based on checkout metrics
-        return (float) $abandonmentCount;
+        // Get total checkout sessions started in the same period
+        $totalSessions = $this->em->getRepository(CheckoutStep::class)
+            ->createQueryBuilder('cs')
+            ->select('COUNT(DISTINCT cs.sessionId)')
+            ->where('cs.store = :store')
+            ->andWhere('cs.createdAt >= :from')
+            ->andWhere('cs.createdAt <= :to')
+            ->setParameter('store', $store)
+            ->setParameter('from', $from)
+            ->setParameter('to', $to)
+            ->getQuery()
+            ->getSingleScalarResult();
+
+        if ($totalSessions == 0) {
+            return 0.0;
+        }
+
+        return (float) ($abandonmentCount / $totalSessions);
     }
 
     public function getAbandonmentsByStep(Store $store): array

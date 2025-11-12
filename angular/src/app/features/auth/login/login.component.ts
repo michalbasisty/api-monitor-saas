@@ -37,10 +37,13 @@ export class LoginComponent {
 
     this.authService.login(this.loginForm.value).subscribe({
       next: () => {
+        this.loading = false;
+        console.log('Login successful');
         this.router.navigate(['/dashboard']);
       },
       error: (err) => {
-        this.error = err.error?.message || 'Login failed. Please try again.';
+        console.error('Login error:', err);
+        this.error = err.message || err.error?.message || 'Login failed. Please try again.';
         this.loading = false;
       }
     });

@@ -67,13 +67,13 @@ export class AuthService implements OnDestroy {
   private checkAuth(): void {
     const token = this.getToken();
     if (token) {
-      this.http.get<User>(`${this.API_URL}/auth/me`)
+      this.http.get<{ user: User }>(`${this.API_URL}/auth/me`)
         .pipe(
           takeUntil(this.destroy$)
         )
         .subscribe({
-          next: (user) => {
-            this.currentUser.set(user);
+          next: (response) => {
+            this.currentUser.set(response.user);
             this.isAuthenticated.set(true);
           },
           error: () => {

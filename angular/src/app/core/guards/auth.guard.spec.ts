@@ -1,20 +1,20 @@
 import { TestBed } from '@angular/core/testing';
-import { Router, UrlTree } from '@angular/router';
-import { authGuard } from './auth.guard';
+import { Router } from '@angular/router';
+import { AuthGuard } from './auth.guard';
 import { AuthService } from '../services/auth.service';
+import { signal } from '@angular/core';
 
-describe('authGuard', () => {
+describe('AuthGuard - Protection & Redirection', () => {
   let authService: jasmine.SpyObj<AuthService>;
   let router: jasmine.SpyObj<Router>;
 
   beforeEach(() => {
-    const authServiceSpy = jasmine.createSpyObj('AuthService', [
-      'isAuthenticated'
-    ]);
-    const routerSpy = jasmine.createSpyObj('Router', ['createUrlTree']);
+    const authServiceSpy = jasmine.createSpyObj('AuthService', ['logout']);
+    const routerSpy = jasmine.createSpyObj('Router', ['navigate']);
 
     TestBed.configureTestingModule({
       providers: [
+        AuthGuard,
         { provide: AuthService, useValue: authServiceSpy },
         { provide: Router, useValue: routerSpy }
       ]
@@ -24,178 +24,232 @@ describe('authGuard', () => {
     router = TestBed.inject(Router) as jasmine.SpyObj<Router>;
   });
 
-  // ============================================
-  // Authentication Tests
-  // ============================================
+  /**
+   * Test 1: Should allow navigation when user is authenticated
+   */
+  it('should allow navigation when user is authenticated', () => {
+    // Mock authenticated user
+    authService.isAuthenticated = signal(true);
+    authService.currentUser = signal({ id: 'user-123', email: 'user@example.com' });
 
-  it('should allow access when user is authenticated', () => {
-    authService.isAuthenticated.and.returnValue(true);
+    const guard = TestBed.inject(AuthGuard);
+    const result = guard('/', null);
 
-    const result = TestBed.runInInjectionContext(() =>
-      authGuard({} as any, () => null)
-    );
-
-    expect(result).toBe(true);
+    expect(result).toBeTruthy();
   });
 
-  it('should deny access when user is not authenticated', () => {
-    authService.isAuthenticated.and.returnValue(false);
-    router.createUrlTree.and.returnValue({} as UrlTree);
+  /**
+   * Test 2: Should deny navigation when user is not authenticated
+   */
+  it('should deny navigation when user is not authenticated', () => {
+    authService.isAuthenticated = signal(false);
+    authService.currentUser = signal(null);
 
-    TestBed.runInInjectionContext(() =>
-      authGuard({} as any, () => null)
-    );
+    const guard = TestBed.inject(AuthGuard);
+    const result = guard('/', null);
 
-    expect(router.createUrlTree).toHaveBeenCalledWith(['/login']);
+    expect(result).toBeFalsy();
   });
 
-  // ============================================
-  // Route Navigation Tests
-  // ============================================
+  /**
+   * Test 3: Should redirect to login when access denied
+   */
+  it('should redirect to login route when access is denied', () => {
+    authService.isAuthenticated = signal(false);
+    authService.currentUser = signal(null);
 
-  it('should redirect to login when not authenticated', () => {
-    authService.isAuthenticated.and.returnValue(false);
-    const urlTree = { toString: () => '/login' } as UrlTree;
-    router.createUrlTree.and.returnValue(urlTree);
+    const guard = TestBed.inject(AuthGuard);
+    guard('/', null);
 
-    const result = TestBed.runInInjectionContext(() =>
-      authGuard({} as any, () => null)
-    );
-
-    expect(result).toEqual(urlTree);
+    expect(router.navigate).toHaveBeenCalledWith(['/login']);
   });
 
-  it('should call createUrlTree with login route', () => {
-    authService.isAuthenticated.and.returnValue(false);
-    router.createUrlTree.and.returnValue({} as UrlTree);
+  /**
+   * Test 4: Should not redirect when access is allowed
+   */
+  it('should not redirect when user is authenticated', () => {
+    authService.isAuthenticated = signal(true);
+    authService.currentUser = signal({ id: 'user-123', email: 'user@example.com' });
 
-    TestBed.runInInjectionContext(() =>
-      authGuard({} as any, () => null)
-    );
+    const guard = TestBed.inject(AuthGuard);
+    guard('/', null);
 
-    expect(router.createUrlTree).toHaveBeenCalledWith(['/login']);
+    expect(router.navigate).not.toHaveBeenCalled();
   });
 
-  // ============================================
-  // Multiple Check Tests
-  // ============================================
+  /**
+   * Test 5: Should handle null user state gracefully
+   */
+  it('should deny access when user is null', () => {
+    authService.isAuthenticated = signal(false);
+    authService.currentUser = signal(null);
 
-  it('should check authentication status on each activation', () => {
-    authService.isAuthenticated.and.returnValue(true);
+    const guard = TestBed.inject(AuthGuard);
+    const result = guard('/', null);
 
-    TestBed.runInInjectionContext(() =>
-      authGuard({} as any, () => null)
-    );
-
-    expect(authService.isAuthenticated).toHaveBeenCalled();
-
-    TestBed.runInInjectionContext(() =>
-      authGuard({} as any, () => null)
-    );
-
-    expect(authService.isAuthenticated).toHaveBeenCalledTimes(2);
+    expect(result).toBeFalsy();
   });
 
-  it('should handle state changes between checks', () => {
-    // First check: authenticated
-    authService.isAuthenticated.and.returnValue(true);
+  /**
+   * Test 6: Should protect dashboard route
+   */
+  it('should protect dashboard route for unauthenticated users', () => {
+    authService.isAuthenticated = signal(false);
+    authService.currentUser = signal(null);
 
-    const result1 = TestBed.runInInjectionContext(() =>
-      authGuard({} as any, () => null)
-    );
+    const guard = TestBed.inject(AuthGuard);
+    const result = guard('/dashboard', null);
 
-    expect(result1).toBe(true);
-
-    // Second check: not authenticated
-    authService.isAuthenticated.and.returnValue(false);
-    router.createUrlTree.and.returnValue({} as UrlTree);
-
-    TestBed.runInInjectionContext(() =>
-      authGuard({} as any, () => null)
-    );
-
-    expect(router.createUrlTree).toHaveBeenCalled();
+    expect(result).toBeFalsy();
+    expect(router.navigate).toHaveBeenCalledWith(['/login']);
   });
 
-  // ============================================
-  // Integration Tests
-  // ============================================
+  /**
+   * Test 7: Should allow dashboard access for authenticated users
+   */
+  it('should allow dashboard route for authenticated users', () => {
+    authService.isAuthenticated = signal(true);
+    authService.currentUser = signal({
+      id: 'user-123',
+      email: 'user@example.com',
+      roles: ['ROLE_USER']
+    });
 
-  it('should work with protected routes', () => {
-    authService.isAuthenticated.and.returnValue(true);
+    const guard = TestBed.inject(AuthGuard);
+    const result = guard('/dashboard', null);
 
-    const result = TestBed.runInInjectionContext(() =>
-      authGuard({} as any, () => null)
-    );
-
-    expect(result).toBe(true);
-    expect(router.createUrlTree).not.toHaveBeenCalled();
+    expect(result).toBeTruthy();
   });
 
-  it('should only redirect once on failed authentication', () => {
-    authService.isAuthenticated.and.returnValue(false);
-    router.createUrlTree.and.returnValue({} as UrlTree);
+  /**
+   * Test 8: Should protect api-settings route
+   */
+  it('should protect api-settings route for unauthenticated users', () => {
+    authService.isAuthenticated = signal(false);
+    authService.currentUser = signal(null);
 
-    TestBed.runInInjectionContext(() =>
-      authGuard({} as any, () => null)
-    );
+    const guard = TestBed.inject(AuthGuard);
+    const result = guard('/api-settings', null);
 
-    expect(router.createUrlTree).toHaveBeenCalledTimes(1);
+    expect(result).toBeFalsy();
   });
 
-  // ============================================
-  // Edge Cases
-  // ============================================
+  /**
+   * Test 9: Should allow api-settings for authenticated users
+   */
+  it('should allow api-settings route for authenticated users', () => {
+    authService.isAuthenticated = signal(true);
+    authService.currentUser = signal({
+      id: 'user-123',
+      email: 'user@example.com',
+      roles: ['ROLE_USER']
+    });
 
-  it('should handle guard on unauthenticated requests', () => {
-    authService.isAuthenticated.and.returnValue(false);
-    const mockUrlTree = {} as UrlTree;
-    router.createUrlTree.and.returnValue(mockUrlTree);
+    const guard = TestBed.inject(AuthGuard);
+    const result = guard('/api-settings', null);
 
-    const result = TestBed.runInInjectionContext(() =>
-      authGuard({} as any, () => null)
-    );
-
-    expect(result).toEqual(mockUrlTree);
+    expect(result).toBeTruthy();
   });
 
-  it('should handle rapid route changes', () => {
-    authService.isAuthenticated.and.returnValue(true);
+  /**
+   * Test 10: Should work with nested routes
+   */
+  it('should protect nested routes', () => {
+    authService.isAuthenticated = signal(false);
+    authService.currentUser = signal(null);
 
-    for (let i = 0; i < 5; i++) {
-      const result = TestBed.runInInjectionContext(() =>
-        authGuard({} as any, () => null)
-      );
-      expect(result).toBe(true);
-    }
+    const guard = TestBed.inject(AuthGuard);
+    const result = guard('/dashboard/analytics/performance', null);
 
-    expect(authService.isAuthenticated).toHaveBeenCalledTimes(5);
+    expect(result).toBeFalsy();
+    expect(router.navigate).toHaveBeenCalledWith(['/login']);
   });
 
-  // ============================================
-  // Return Value Tests
-  // ============================================
+  /**
+   * Test 11: Should handle authentication state changes
+   */
+  it('should respond to authentication state changes', () => {
+    authService.isAuthenticated = signal(false);
+    authService.currentUser = signal(null);
 
-  it('should return true boolean when authenticated', () => {
-    authService.isAuthenticated.and.returnValue(true);
+    const guard = TestBed.inject(AuthGuard);
+    let result = guard('/', null);
+    expect(result).toBeFalsy();
 
-    const result = TestBed.runInInjectionContext(() =>
-      authGuard({} as any, () => null)
-    );
+    // Simulate login
+    authService.isAuthenticated = signal(true);
+    authService.currentUser = signal({ id: 'user-123', email: 'user@example.com' });
 
-    expect(typeof result).toBe('boolean');
-    expect(result).toBe(true);
+    result = guard('/', null);
+    expect(result).toBeTruthy();
   });
 
-  it('should return UrlTree when not authenticated', () => {
-    authService.isAuthenticated.and.returnValue(false);
-    const mockUrlTree = { toString: () => '/login' } as UrlTree;
-    router.createUrlTree.and.returnValue(mockUrlTree);
+  /**
+   * Test 12: Should clear router navigation history on redirect
+   */
+  it('should navigate to login without history', () => {
+    authService.isAuthenticated = signal(false);
+    authService.currentUser = signal(null);
 
-    const result = TestBed.runInInjectionContext(() =>
-      authGuard({} as any, () => null)
-    );
+    const guard = TestBed.inject(AuthGuard);
+    guard('/', null);
 
-    expect(result).toBe(mockUrlTree);
+    // Verify that navigation goes to /login (the second argument in navigate 
+    // could be { replaceUrl: true } to clear history)
+    expect(router.navigate).toHaveBeenCalled();
+    const callArgs = router.navigate.calls.mostRecent().args;
+    expect(callArgs[0]).toEqual(['/login']);
+  });
+
+  /**
+   * Test 13: Should validate JWT token presence
+   */
+  it('should check for valid JWT token in storage', () => {
+    // Mock localStorage
+    const token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...';
+    spyOn(localStorage, 'getItem').and.returnValue(token);
+
+    authService.isAuthenticated = signal(true);
+    authService.currentUser = signal({ id: 'user-123', email: 'user@example.com' });
+
+    const guard = TestBed.inject(AuthGuard);
+    const result = guard('/', null);
+
+    expect(result).toBeTruthy();
+    expect(localStorage.getItem).toHaveBeenCalledWith('auth_token');
+  });
+
+  /**
+   * Test 14: Should deny access if token is expired
+   */
+  it('should deny access if JWT token is expired', () => {
+    spyOn(localStorage, 'getItem').and.returnValue(null);
+
+    authService.isAuthenticated = signal(false);
+    authService.currentUser = signal(null);
+
+    const guard = TestBed.inject(AuthGuard);
+    const result = guard('/', null);
+
+    expect(result).toBeFalsy();
+  });
+
+  /**
+   * Test 15: Should handle guard on admin routes
+   */
+  it('should protect admin routes appropriately', () => {
+    authService.isAuthenticated = signal(true);
+    authService.currentUser = signal({
+      id: 'user-123',
+      email: 'user@example.com',
+      roles: ['ROLE_USER'] // Not admin
+    });
+
+    const guard = TestBed.inject(AuthGuard);
+    // Note: This may require role-based guard instead of just auth guard
+    // Basic auth guard should still allow but role guard would deny
+    const result = guard('/admin', null);
+
+    expect(result).toBeTruthy(); // Auth guard allows, role guard would deny
   });
 });

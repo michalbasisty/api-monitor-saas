@@ -14,20 +14,39 @@ class SalesMetricsService
 
     public function getRealtimeSalesMetrics(Store $store, string $interval = '1h'): array
     {
-        // TODO: Query real sales metrics from database based on interval
+        $salesMetricsRepo = $this->entityManager->getRepository(\App\Modules\Ecommerce\Entity\SalesMetric::class);
+
+        // Parse interval (e.g., '1h', '24h', '7d')
+        $hours = $this->parseIntervalToHours($interval);
+        $since = new \DateTime("-{$hours} hours");
+
+        $metrics = $salesMetricsRepo->findMetricsSince($store, $since);
+
+        $data = array_map(function ($metric) {
+            return [
+                'timestamp' => $metric->getTimestamp()->format('c'),
+                'revenue' => (float) ($metric->getRevenuePerMinute() ?? 0),
+                'orders' => (float) ($metric->getOrdersPerMinute() ?? 0),
+                'conversionRate' => (float) ($metric->getCheckoutSuccessRate() ?? 0),
+                'avgOrderValue' => (float) ($metric->getAvgOrderValue() ?? 0),
+            ];
+        }, $metrics);
+
         return [
             'storeId' => $store->getId(),
             'interval' => $interval,
-            'data' => [
-                [
-                    'timestamp' => (new \DateTime())->format('c'),
-                    'revenue' => 0,
-                    'orders' => 0,
-                    'conversionRate' => 0.0,
-                    'avgOrderValue' => 0.0,
-                ],
-            ],
+            'data' => $data,
         ];
+    }
+
+    private function parseIntervalToHours(string $interval): int
+    {
+        if (str_ends_with($interval, 'h')) {
+            return (int) str_replace('h', '', $interval);
+        } elseif (str_ends_with($interval, 'd')) {
+            return (int) str_replace('d', '', $interval) * 24;
+        }
+        return 1; // Default to 1 hour
     }
 
     public function calculateLostRevenue(Store $store, string $timeframe = '24h'): array

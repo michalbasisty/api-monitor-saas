@@ -203,11 +203,9 @@ class AuthController extends AbstractController
     ]
     ]);
 
-    } catch (ApiException $e) {
-             throw $e;
     } catch (\Exception $e) {
-    error_log('Login error: ' . $e->getMessage() . ' | ' . $e->getFile() . ':' . $e->getLine());
-        throw new ApiException('Login failed: ' . $e->getMessage(), Response::HTTP_INTERNAL_SERVER_ERROR);
+        error_log('Login error: ' . $e->getMessage() . ' | ' . $e->getFile() . ':' . $e->getLine());
+        throw $e;
     }
     }
 

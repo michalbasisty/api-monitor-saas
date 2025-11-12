@@ -41,13 +41,27 @@ class PaymentService
 
     private function encryptApiKey(string $key): string
     {
-        // TODO: Implement proper encryption
-        return base64_encode($key);
+        $iv = openssl_random_pseudo_bytes(openssl_cipher_iv_length('aes-256-cbc'));
+        $encrypted = openssl_encrypt($key, 'aes-256-cbc', $this->getEncryptionKey(), 0, $iv);
+        return base64_encode($iv . $encrypted);
     }
 
     public function decryptApiKey(string $encryptedKey): string
     {
-        // TODO: Implement proper decryption
-        return base64_decode($encryptedKey);
+        $data = base64_decode($encryptedKey);
+        $ivLength = openssl_cipher_iv_length('aes-256-cbc');
+        $iv = substr($data, 0, $ivLength);
+        $encrypted = substr($data, $ivLength);
+        return openssl_decrypt($encrypted, 'aes-256-cbc', $this->getEncryptionKey(), 0, $iv);
+    }
+
+    private function getEncryptionKey(): string
+    {
+        $key = getenv('PAYMENT_ENCRYPTION_KEY');
+        if (!$key) {
+            // Fallback for development - in production this should be set via environment
+            $key = 'default-payment-encryption-key-32-chars';
+        }
+        return substr(hash('sha256', $key), 0, 32);
     }
 }

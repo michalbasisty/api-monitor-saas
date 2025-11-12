@@ -166,7 +166,8 @@ func (c *Container) initRateLimiter() error {
 	c.logger.Info("rate limiter initialized")
 
 	c.shutdownFns = append(c.shutdownFns, func(ctx context.Context) error {
-		return c.rateLimiter.Close()
+		c.rateLimiter.Close()
+		return nil
 	})
 
 	return nil

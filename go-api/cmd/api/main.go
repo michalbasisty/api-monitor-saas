@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"api-monitor-go/internal/container"
-	"api-monitor-go/internal/logger"
+	_ "api-monitor-go/internal/logger"
 	"api-monitor-go/internal/middleware"
 	"github.com/gorilla/websocket"
 	"github.com/joho/godotenv"
