@@ -37,6 +37,9 @@ RUN composer install \
 # Copy the rest of the application
 COPY . .
 
+# Remove conflicting security.yaml installed by Symfony recipe (we use root config/security.yaml)
+RUN rm -f config/packages/security.yaml
+
 # Set up directories and permissions
 RUN rm -rf var/cache var/log && \
     mkdir -p \
